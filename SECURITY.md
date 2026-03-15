@@ -6,7 +6,7 @@ If you discover a security vulnerability in lifeOS, please report it responsibly
 
 **Do NOT open a public GitHub issue for security vulnerabilities.**
 
-Instead, please email: **goyaleklavya@gmail.com**
+Instead, please email: **goyaleklavya24@gmail.com**
 
 Or use [GitHub's private vulnerability reporting](https://github.com/eklavyagoyal/lifeos/security/advisories/new).
 
