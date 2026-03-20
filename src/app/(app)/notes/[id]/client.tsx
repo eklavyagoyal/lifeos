@@ -4,10 +4,12 @@ import { useRouter } from 'next/navigation';
 import { DetailPageShell } from '@/components/detail/detail-page-shell';
 import { EditableField } from '@/components/detail/editable-field';
 import { StatusBadge } from '@/components/detail/status-badge';
+import { AttachmentsPanel, type AttachmentListItem } from '@/components/detail/attachments-panel';
 import { TagsPills } from '@/components/detail/tags-pills';
 import { RelationsPanel } from '@/components/detail/relations-panel';
 import { updateNoteAction, archiveNoteAction } from '@/app/actions';
 import { formatDate } from '@/lib/utils';
+import type { ConnectionItem, ConnectionSuggestion } from '@/lib/types';
 
 interface Note {
   id: string;
@@ -27,20 +29,8 @@ interface Tag {
   itemTagId: string;
 }
 
-interface RelatedItem {
-  relation: {
-    id: string;
-    sourceType: string;
-    sourceId: string;
-    targetType: string;
-    targetId: string;
-    relationType: string;
-  };
-  type: string;
-  id: string;
-  title: string;
-  direction: 'outgoing' | 'incoming';
-}
+type RelatedItem = ConnectionItem;
+type SuggestedItem = ConnectionSuggestion;
 
 const NOTE_TYPE_OPTIONS = [
   { value: 'note', label: 'Note' },
@@ -53,13 +43,19 @@ const NOTE_TYPE_OPTIONS = [
 interface NoteDetailClientProps {
   note: Note;
   relatedItems: RelatedItem[];
+  structuralItems: RelatedItem[];
+  suggestedItems: SuggestedItem[];
   tags: Tag[];
+  attachments: AttachmentListItem[];
 }
 
 export function NoteDetailClient({
   note,
   relatedItems,
+  structuralItems,
+  suggestedItems,
   tags,
+  attachments,
 }: NoteDetailClientProps) {
   const router = useRouter();
 
@@ -134,8 +130,16 @@ export function NoteDetailClient({
         <TagsPills itemType="note" itemId={note.id} tags={tags} />
       </div>
 
+      <AttachmentsPanel itemType="note" itemId={note.id} attachments={attachments} />
+
       {/* Relations */}
-      <RelationsPanel items={relatedItems} />
+      <RelationsPanel
+        items={relatedItems}
+        structuralItems={structuralItems}
+        suggestions={suggestedItems}
+        currentItemType="note"
+        currentItemId={note.id}
+      />
     </DetailPageShell>
   );
 }

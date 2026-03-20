@@ -8,6 +8,9 @@
  * - /login
  * - /api/health
  * - /_next/* (static assets, HMR)
+ * - /manifest.webmanifest
+ * - /sw.js
+ * - /offline
  * - /favicon.ico
  */
 
@@ -16,8 +19,8 @@ import { NextResponse, type NextRequest } from 'next/server';
 const SESSION_COOKIE_NAME = 'lifeos-session';
 
 /** Routes that don't require authentication */
-const PUBLIC_PATHS = ['/login', '/api/health'];
-const PUBLIC_PREFIXES = ['/_next/', '/favicon'];
+const PUBLIC_PATHS = ['/login', '/api/health', '/manifest.webmanifest', '/sw.js', '/offline'];
+const PUBLIC_PREFIXES = ['/_next/', '/favicon', '/icon'];
 
 function isPublicRoute(pathname: string): boolean {
   if (PUBLIC_PATHS.includes(pathname)) return true;
@@ -120,9 +123,10 @@ export const config = {
      * - _next/static (static files)
      * - _next/image (image optimization)
      * - favicon.ico
+     * - sw.js
      * We also handle these in isPublicRoute, but the matcher
      * improves performance by not invoking middleware at all.
      */
-    '/((?!_next/static|_next/image|favicon.ico).*)',
+    '/((?!_next/static|_next/image|favicon.ico|sw.js).*)',
   ],
 };

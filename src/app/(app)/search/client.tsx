@@ -1,27 +1,37 @@
 'use client';
 
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect, type ReactNode } from 'react';
 import Link from 'next/link';
-import { Search, X, CheckSquare, Repeat, BookOpen, StickyNote, Lightbulb, FolderKanban, Target } from 'lucide-react';
+import {
+  Search,
+  X,
+  CheckSquare,
+  Repeat,
+  BookOpen,
+  StickyNote,
+  Lightbulb,
+  FolderKanban,
+  Target,
+  Users,
+  CalendarDays,
+  ClipboardList,
+  BarChart3,
+} from 'lucide-react';
 import { searchAction } from '@/app/actions';
-import type { ItemType } from '@/lib/types';
+import type { ItemType, SearchResultItem } from '@/lib/types';
 
-interface SearchResult {
-  itemId: string;
-  itemType: ItemType;
-  title: string;
-  snippet: string;
-  rank: number;
-}
-
-const TYPE_CONFIG: Record<string, { label: string; icon: React.ReactNode; href: (id: string) => string; color: string }> = {
-  task: { label: 'Task', icon: <CheckSquare size={14} />, href: (id) => `/tasks/${id}`, color: 'text-blue-500' },
-  habit: { label: 'Habit', icon: <Repeat size={14} />, href: (id) => `/habits/${id}`, color: 'text-green-500' },
-  journal: { label: 'Journal', icon: <BookOpen size={14} />, href: (id) => `/journal/${id}`, color: 'text-amber-500' },
-  note: { label: 'Note', icon: <StickyNote size={14} />, href: (id) => `/notes/${id}`, color: 'text-purple-500' },
-  idea: { label: 'Idea', icon: <Lightbulb size={14} />, href: (id) => `/ideas/${id}`, color: 'text-yellow-500' },
-  project: { label: 'Project', icon: <FolderKanban size={14} />, href: (id) => `/projects/${id}`, color: 'text-indigo-500' },
-  goal: { label: 'Goal', icon: <Target size={14} />, href: (id) => `/goals/${id}`, color: 'text-rose-500' },
+const TYPE_CONFIG: Record<string, { label: string; icon: ReactNode; color: string }> = {
+  task: { label: 'Task', icon: <CheckSquare size={14} />, color: 'text-blue-500' },
+  habit: { label: 'Habit', icon: <Repeat size={14} />, color: 'text-green-500' },
+  journal: { label: 'Journal', icon: <BookOpen size={14} />, color: 'text-amber-500' },
+  note: { label: 'Note', icon: <StickyNote size={14} />, color: 'text-purple-500' },
+  idea: { label: 'Idea', icon: <Lightbulb size={14} />, color: 'text-yellow-500' },
+  project: { label: 'Project', icon: <FolderKanban size={14} />, color: 'text-indigo-500' },
+  goal: { label: 'Goal', icon: <Target size={14} />, color: 'text-rose-500' },
+  entity: { label: 'Entity', icon: <Users size={14} />, color: 'text-pink-500' },
+  metric: { label: 'Metric', icon: <BarChart3 size={14} />, color: 'text-cyan-500' },
+  event: { label: 'Event', icon: <CalendarDays size={14} />, color: 'text-orange-500' },
+  review: { label: 'Review', icon: <ClipboardList size={14} />, color: 'text-teal-500' },
 };
 
 const FILTER_OPTIONS: { value: ItemType | 'all'; label: string }[] = [
@@ -33,12 +43,16 @@ const FILTER_OPTIONS: { value: ItemType | 'all'; label: string }[] = [
   { value: 'idea', label: 'Ideas' },
   { value: 'project', label: 'Projects' },
   { value: 'goal', label: 'Goals' },
+  { value: 'entity', label: 'Entities' },
+  { value: 'metric', label: 'Metrics' },
+  { value: 'event', label: 'Events' },
+  { value: 'review', label: 'Reviews' },
 ];
 
 export function SearchClient() {
   const [query, setQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState<ItemType | 'all'>('all');
-  const [results, setResults] = useState<SearchResult[]>([]);
+  const [results, setResults] = useState<SearchResultItem[]>([]);
   const [searching, setSearching] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -98,7 +112,7 @@ export function SearchClient() {
           type="text"
           value={query}
           onChange={(e) => handleQueryChange(e.target.value)}
-          placeholder="Search tasks, notes, journal entries, projects..."
+          placeholder="Search tasks, notes, reviews, events, projects, goals, and attached files..."
           className="w-full rounded-lg border border-surface-3 bg-surface-1 py-2.5 pl-10 pr-10 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-brand-primary"
         />
         {query && (
@@ -153,7 +167,7 @@ export function SearchClient() {
             return (
               <Link
                 key={`${result.itemType}-${result.itemId}`}
-                href={config.href(result.itemId)}
+                href={result.detailUrl}
                 className="card flex items-start gap-3 p-3 transition-colors hover:bg-surface-2"
               >
                 <div className={`mt-0.5 ${config.color}`}>
@@ -168,6 +182,17 @@ export function SearchClient() {
                       {config.label}
                     </span>
                   </div>
+                  {result.subtitle && (
+                    <p className="mt-0.5 text-2xs text-text-muted">{result.subtitle}</p>
+                  )}
+                  {result.attachmentCount ? (
+                    <p className="mt-0.5 text-2xs text-text-muted">
+                      {result.attachmentCount} attachment{result.attachmentCount !== 1 ? 's' : ''}
+                      {result.attachmentNames && result.attachmentNames.length > 0
+                        ? ` · ${result.attachmentNames.join(', ')}`
+                        : ''}
+                    </p>
+                  ) : null}
                   {result.snippet && (
                     <p
                       className="mt-0.5 text-xs text-text-tertiary line-clamp-2"
@@ -184,7 +209,9 @@ export function SearchClient() {
       {!searching && !hasSearched && (
         <div className="py-8 text-center">
           <Search size={32} className="mx-auto text-text-muted mb-3" />
-          <p className="text-sm text-text-muted">Search across all your tasks, notes, journal entries, projects, goals, and ideas.</p>
+          <p className="text-sm text-text-muted">
+            Search across tasks, notes, journal entries, projects, goals, reviews, events, metrics, entities, and linked attachments.
+          </p>
           <p className="text-2xs text-text-muted mt-1">Start typing to see results instantly.</p>
         </div>
       )}

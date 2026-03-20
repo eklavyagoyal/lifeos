@@ -2,6 +2,21 @@ import { db } from '../db';
 import { tags, itemTags } from '../db/schema';
 import { eq, and, desc } from 'drizzle-orm';
 import { newId, now } from '@/lib/utils';
+import { reindexSearchItem, type SearchIndexItemType } from './search';
+
+const SEARCHABLE_ITEM_TYPES = new Set<SearchIndexItemType>([
+  'task',
+  'habit',
+  'journal',
+  'note',
+  'idea',
+  'project',
+  'goal',
+  'entity',
+  'metric',
+  'event',
+  'review',
+]);
 
 /** Create a tag */
 export function createTag(name: string, color?: string) {
@@ -64,6 +79,10 @@ export function addTagToItem(itemType: string, itemId: string, tagId: string) {
     createdAt: now(),
   }).run();
 
+  if (SEARCHABLE_ITEM_TYPES.has(itemType as SearchIndexItemType)) {
+    reindexSearchItem(itemType as SearchIndexItemType, itemId);
+  }
+
   return db.select().from(itemTags).where(eq(itemTags.id, id)).get()!;
 }
 
@@ -78,6 +97,10 @@ export function removeTagFromItem(itemType: string, itemId: string, tagId: strin
       )
     )
     .run();
+
+  if (SEARCHABLE_ITEM_TYPES.has(itemType as SearchIndexItemType)) {
+    reindexSearchItem(itemType as SearchIndexItemType, itemId);
+  }
 }
 
 /** Get all tags for an item */

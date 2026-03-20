@@ -11,9 +11,11 @@ import {
   notes, ideas, projects, goals, metricLogs,
   reviews, inboxItems, relations, tags, itemTags,
   gamificationProfile, xpEvents, achievements,
-  entities, events, templates, appSettings,
+  entities, events, templates, appSettings, scheduledJobs, jobRuns, milestones,
+  attachments, attachmentLinks, importRuns, importedRecords,
 } from '@/server/db/schema';
 import { desc } from 'drizzle-orm';
+import { APP_VERSION } from '@/lib/app-info';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
@@ -39,12 +41,15 @@ export interface LifeOSExport {
     ideas: unknown[];
     projects: unknown[];
     goals: unknown[];
+    milestones: unknown[];
     metricLogs: unknown[];
     reviews: unknown[];
     inboxItems: unknown[];
     entities: unknown[];
     events: unknown[];
     templates: unknown[];
+    attachments: unknown[];
+    attachmentLinks: unknown[];
     relations: unknown[];
     tags: unknown[];
     itemTags: unknown[];
@@ -52,6 +57,10 @@ export interface LifeOSExport {
     xpEvents: unknown[];
     achievements: unknown[];
     appSettings: unknown[];
+    scheduledJobs: unknown[];
+    jobRuns: unknown[];
+    importRuns: unknown[];
+    importedRecords: unknown[];
   };
 }
 
@@ -68,12 +77,15 @@ export function exportFullJSON(): LifeOSExport {
   const allIdeas = db.select().from(ideas).orderBy(desc(ideas.createdAt)).all();
   const allProjects = db.select().from(projects).orderBy(desc(projects.createdAt)).all();
   const allGoals = db.select().from(goals).orderBy(desc(goals.createdAt)).all();
+  const allMilestones = db.select().from(milestones).orderBy(desc(milestones.createdAt)).all();
   const allMetrics = db.select().from(metricLogs).orderBy(desc(metricLogs.createdAt)).all();
   const allReviews = db.select().from(reviews).orderBy(desc(reviews.createdAt)).all();
   const allInbox = db.select().from(inboxItems).orderBy(desc(inboxItems.createdAt)).all();
   const allEntities = db.select().from(entities).orderBy(desc(entities.createdAt)).all();
   const allEvents = db.select().from(events).orderBy(desc(events.createdAt)).all();
   const allTemplates = db.select().from(templates).orderBy(desc(templates.createdAt)).all();
+  const allAttachments = db.select().from(attachments).orderBy(desc(attachments.createdAt)).all();
+  const allAttachmentLinks = db.select().from(attachmentLinks).orderBy(desc(attachmentLinks.createdAt)).all();
   const allRelations = db.select().from(relations).orderBy(desc(relations.createdAt)).all();
   const allTags = db.select().from(tags).orderBy(desc(tags.createdAt)).all();
   const allItemTags = db.select().from(itemTags).orderBy(desc(itemTags.createdAt)).all();
@@ -81,6 +93,10 @@ export function exportFullJSON(): LifeOSExport {
   const allXpEvents = db.select().from(xpEvents).orderBy(desc(xpEvents.createdAt)).all();
   const allAchievements = db.select().from(achievements).orderBy(desc(achievements.createdAt)).all();
   const allSettings = db.select().from(appSettings).all();
+  const allScheduledJobs = db.select().from(scheduledJobs).orderBy(desc(scheduledJobs.createdAt)).all();
+  const allJobRuns = db.select().from(jobRuns).orderBy(desc(jobRuns.createdAt)).all();
+  const allImportRuns = db.select().from(importRuns).orderBy(desc(importRuns.createdAt)).all();
+  const allImportedRecords = db.select().from(importedRecords).orderBy(desc(importedRecords.createdAt)).all();
 
   const data = {
     tasks: allTasks,
@@ -91,12 +107,15 @@ export function exportFullJSON(): LifeOSExport {
     ideas: allIdeas,
     projects: allProjects,
     goals: allGoals,
+    milestones: allMilestones,
     metricLogs: allMetrics,
     reviews: allReviews,
     inboxItems: allInbox,
     entities: allEntities,
     events: allEvents,
     templates: allTemplates,
+    attachments: allAttachments,
+    attachmentLinks: allAttachmentLinks,
     relations: allRelations,
     tags: allTags,
     itemTags: allItemTags,
@@ -104,6 +123,10 @@ export function exportFullJSON(): LifeOSExport {
     xpEvents: allXpEvents,
     achievements: allAchievements,
     appSettings: allSettings,
+    scheduledJobs: allScheduledJobs,
+    jobRuns: allJobRuns,
+    importRuns: allImportRuns,
+    importedRecords: allImportedRecords,
   };
 
   const tableCounts: Record<string, number> = {};
@@ -114,7 +137,7 @@ export function exportFullJSON(): LifeOSExport {
   return {
     meta: {
       app: 'lifeOS',
-      version: '0.1.0',
+      version: APP_VERSION,
       exportedAt: new Date().toISOString(),
       format: 'lifeos-json-v1',
       tables: tableCounts,
@@ -166,6 +189,8 @@ export interface DataStats {
   entities: number;
   reviews: number;
   tags: number;
+  attachments: number;
+  importRuns: number;
   xpEvents: number;
   totalRecords: number;
   dbSizeBytes: number;
@@ -190,6 +215,8 @@ export function getDataStats(): DataStats {
       (SELECT COUNT(*) FROM entities) as entities,
       (SELECT COUNT(*) FROM reviews) as reviews,
       (SELECT COUNT(*) FROM tags) as tags,
+      (SELECT COUNT(*) FROM attachments) as attachments,
+      (SELECT COUNT(*) FROM import_runs) as import_runs,
       (SELECT COUNT(*) FROM xp_events) as xp_events
   `).get() as Record<string, number>;
 
@@ -221,6 +248,8 @@ export function getDataStats(): DataStats {
     entities: counts.entities,
     reviews: counts.reviews,
     tags: counts.tags,
+    attachments: counts.attachments,
+    importRuns: counts.import_runs,
     xpEvents: counts.xp_events,
     totalRecords,
     dbSizeBytes,

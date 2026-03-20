@@ -3,6 +3,21 @@ import { relations as relationsTable } from '../db/schema';
 import { eq, and, or, desc } from 'drizzle-orm';
 import { newId, now } from '@/lib/utils';
 import type { ItemType, RelationType } from '@/lib/types';
+import { reindexSearchItem, type SearchIndexItemType } from './search';
+
+const SEARCHABLE_ITEM_TYPES = new Set<SearchIndexItemType>([
+  'task',
+  'habit',
+  'journal',
+  'note',
+  'idea',
+  'project',
+  'goal',
+  'entity',
+  'metric',
+  'event',
+  'review',
+]);
 
 export interface CreateRelationInput {
   sourceType: ItemType;
@@ -44,6 +59,13 @@ export function createRelation(input: CreateRelationInput) {
     metadata: input.metadata ?? null,
     createdAt: now(),
   }).run();
+
+  if (SEARCHABLE_ITEM_TYPES.has(input.sourceType as SearchIndexItemType)) {
+    reindexSearchItem(input.sourceType as SearchIndexItemType, input.sourceId);
+  }
+  if (SEARCHABLE_ITEM_TYPES.has(input.targetType as SearchIndexItemType)) {
+    reindexSearchItem(input.targetType as SearchIndexItemType, input.targetId);
+  }
 
   return db.select().from(relationsTable).where(eq(relationsTable.id, id)).get();
 }
@@ -89,7 +111,17 @@ export function getIncomingRelations(itemType: string, itemId: string) {
 
 /** Remove a relation by ID */
 export function removeRelation(id: string) {
+  const relation = db.select().from(relationsTable).where(eq(relationsTable.id, id)).get();
   db.delete(relationsTable).where(eq(relationsTable.id, id)).run();
+
+  if (!relation) return;
+
+  if (SEARCHABLE_ITEM_TYPES.has(relation.sourceType as SearchIndexItemType)) {
+    reindexSearchItem(relation.sourceType as SearchIndexItemType, relation.sourceId);
+  }
+  if (SEARCHABLE_ITEM_TYPES.has(relation.targetType as SearchIndexItemType)) {
+    reindexSearchItem(relation.targetType as SearchIndexItemType, relation.targetId);
+  }
 }
 
 /** Remove all relations for an item */

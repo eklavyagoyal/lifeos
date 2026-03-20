@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { X, Plus } from 'lucide-react';
 import { addTagAction, removeTagAction } from '@/app/actions';
 
@@ -18,6 +19,7 @@ interface TagsPillsProps {
 }
 
 export function TagsPills({ itemType, itemId, tags }: TagsPillsProps) {
+  const router = useRouter();
   const [isAdding, setIsAdding] = useState(false);
   const [tagInput, setTagInput] = useState('');
 
@@ -27,10 +29,12 @@ export function TagsPills({ itemType, itemId, tags }: TagsPillsProps) {
     await addTagAction(itemType, itemId, name);
     setTagInput('');
     setIsAdding(false);
+    router.refresh();
   };
 
   const handleRemove = async (tagId: string) => {
     await removeTagAction(itemType, itemId, tagId);
+    router.refresh();
   };
 
   return (

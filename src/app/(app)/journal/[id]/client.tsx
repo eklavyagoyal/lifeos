@@ -4,10 +4,12 @@ import { useRouter } from 'next/navigation';
 import { DetailPageShell } from '@/components/detail/detail-page-shell';
 import { EditableField } from '@/components/detail/editable-field';
 import { StatusBadge } from '@/components/detail/status-badge';
+import { AttachmentsPanel, type AttachmentListItem } from '@/components/detail/attachments-panel';
 import { TagsPills } from '@/components/detail/tags-pills';
 import { RelationsPanel } from '@/components/detail/relations-panel';
 import { updateJournalAction, archiveJournalAction } from '@/app/actions';
 import { formatDate, formatISODate } from '@/lib/utils';
+import type { ConnectionItem, ConnectionSuggestion } from '@/lib/types';
 import { MOOD_LABELS } from '@/lib/constants';
 
 interface JournalEntry {
@@ -32,20 +34,8 @@ interface Tag {
   itemTagId: string;
 }
 
-interface RelatedItem {
-  relation: {
-    id: string;
-    sourceType: string;
-    sourceId: string;
-    targetType: string;
-    targetId: string;
-    relationType: string;
-  };
-  type: string;
-  id: string;
-  title: string;
-  direction: 'outgoing' | 'incoming';
-}
+type RelatedItem = ConnectionItem;
+type SuggestedItem = ConnectionSuggestion;
 
 const ENTRY_TYPE_OPTIONS = [
   { value: 'daily', label: 'Daily' },
@@ -68,13 +58,19 @@ const ENERGY_OPTIONS = Array.from({ length: 10 }, (_, i) => ({
 interface JournalDetailClientProps {
   entry: JournalEntry;
   relatedItems: RelatedItem[];
+  structuralItems: RelatedItem[];
+  suggestedItems: SuggestedItem[];
   tags: Tag[];
+  attachments: AttachmentListItem[];
 }
 
 export function JournalDetailClient({
   entry,
   relatedItems,
+  structuralItems,
+  suggestedItems,
   tags,
+  attachments,
 }: JournalDetailClientProps) {
   const router = useRouter();
 
@@ -150,8 +146,16 @@ export function JournalDetailClient({
         <TagsPills itemType="journal" itemId={entry.id} tags={tags} />
       </div>
 
+      <AttachmentsPanel itemType="journal" itemId={entry.id} attachments={attachments} />
+
       {/* Relations */}
-      <RelationsPanel items={relatedItems} />
+      <RelationsPanel
+        items={relatedItems}
+        structuralItems={structuralItems}
+        suggestions={suggestedItems}
+        currentItemType="journal"
+        currentItemId={entry.id}
+      />
     </DetailPageShell>
   );
 }

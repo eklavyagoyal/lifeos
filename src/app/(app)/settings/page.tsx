@@ -1,9 +1,10 @@
 import {
   Shield, Database, Download, Server,
-  HardDrive, FileJson, CheckCircle, AlertTriangle,
+  HardDrive, FileJson, CheckCircle, AlertTriangle, Activity, XCircle,
 } from 'lucide-react';
 import { getDataStats } from '@/server/services/export';
 import { getSystemInfo } from '@/server/services/system';
+import { getRuntimeDiagnostics } from '@/server/services/runtime';
 import { getProfile } from '@/server/services/gamification';
 import { calculateLevel } from '@/lib/constants';
 import { LogoutButton } from './logout-button';
@@ -15,6 +16,7 @@ export const dynamic = 'force-dynamic';
 export default function SettingsPage() {
   const stats = getDataStats();
   const system = getSystemInfo();
+  const diagnostics = getRuntimeDiagnostics();
   const profile = getProfile();
   const level = calculateLevel(profile.totalXp ?? 0);
 
@@ -99,6 +101,8 @@ export default function SettingsPage() {
           <StatCard label="Goals" value={stats.goals} />
           <StatCard label="Metrics" value={stats.metricLogs} />
           <StatCard label="People & Learning" value={stats.entities} />
+          <StatCard label="Attachments" value={stats.attachments} />
+          <StatCard label="Import Runs" value={stats.importRuns} />
         </div>
 
         <div className="flex items-center justify-between rounded-lg bg-surface-1 px-3 py-2">
@@ -117,6 +121,54 @@ export default function SettingsPage() {
         <ExportActions />
       </section>
 
+      {/* Runtime Diagnostics */}
+      <section className="card space-y-4">
+        <div className="flex items-center gap-2">
+          <Activity className="h-5 w-5 text-brand-primary" />
+          <h2 className="text-sm font-semibold text-text-primary">Runtime Diagnostics</h2>
+        </div>
+
+        <div className="flex items-center justify-between rounded-lg bg-surface-1 px-3 py-2">
+          <div>
+            <p className="text-sm text-text-primary">Current readiness</p>
+            <p className="text-2xs text-text-tertiary">
+              {diagnostics.errorCount > 0
+                ? `${diagnostics.errorCount} blocking issue${diagnostics.errorCount !== 1 ? 's' : ''}`
+                : diagnostics.warningCount > 0
+                ? `${diagnostics.warningCount} warning${diagnostics.warningCount !== 1 ? 's' : ''}`
+                : 'All core checks look healthy'}
+            </p>
+          </div>
+          <RuntimeStatusBadge status={diagnostics.status} />
+        </div>
+
+        <div className="space-y-2">
+          {diagnostics.checks.map((check) => (
+            <div
+              key={check.key}
+              className="rounded-lg border border-surface-3 bg-surface-1 px-3 py-2"
+            >
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm text-text-primary">{check.label}</p>
+                  <p className="text-2xs text-text-tertiary">{check.message}</p>
+                </div>
+                <CheckStatusBadge status={check.status} />
+              </div>
+              {check.details.length > 0 && (
+                <div className="mt-2 space-y-0.5">
+                  {check.details.map((detail) => (
+                    <p key={detail} className="text-2xs text-text-muted">
+                      {detail}
+                    </p>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </section>
+
       {/* System Info Section */}
       <section className="card space-y-4">
         <div className="flex items-center gap-2">
@@ -132,6 +184,7 @@ export default function SettingsPage() {
           <InfoRow label="Uptime" value={system.uptime} />
           <InfoRow label="Database" value={system.dbPath} mono />
           <InfoRow label="Data directory" value={system.dataDir} mono />
+          <InfoRow label="Attachments" value={system.attachmentsPath} mono />
         </div>
 
         {/* Profile summary */}
@@ -176,5 +229,59 @@ function InfoRow({ label, value, mono }: { label: string; value: string; mono?: 
         {value}
       </span>
     </div>
+  );
+}
+
+function RuntimeStatusBadge({ status }: { status: 'ok' | 'degraded' | 'error' }) {
+  if (status === 'ok') {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full bg-green-500/10 px-2.5 py-1 text-xs font-medium text-green-600">
+        <CheckCircle className="h-3.5 w-3.5" />
+        Ready
+      </span>
+    );
+  }
+
+  if (status === 'degraded') {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2.5 py-1 text-xs font-medium text-amber-600">
+        <AlertTriangle className="h-3.5 w-3.5" />
+        Degraded
+      </span>
+    );
+  }
+
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full bg-red-500/10 px-2.5 py-1 text-xs font-medium text-red-600">
+      <XCircle className="h-3.5 w-3.5" />
+      Blocked
+    </span>
+  );
+}
+
+function CheckStatusBadge({ status }: { status: 'ok' | 'warn' | 'error' }) {
+  if (status === 'ok') {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full bg-green-500/10 px-2 py-0.5 text-2xs font-medium text-green-600">
+        <CheckCircle className="h-3 w-3" />
+        OK
+      </span>
+    );
+  }
+
+  if (status === 'warn') {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2 py-0.5 text-2xs font-medium text-amber-600">
+        <AlertTriangle className="h-3 w-3" />
+        Warning
+      </span>
+    );
+  }
+
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full bg-red-500/10 px-2 py-0.5 text-2xs font-medium text-red-600">
+      <XCircle className="h-3 w-3" />
+      Error
+    </span>
   );
 }

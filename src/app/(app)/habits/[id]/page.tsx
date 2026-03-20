@@ -1,10 +1,14 @@
 import { notFound } from 'next/navigation';
-import { getHabit, getHabitCompletions } from '@/server/services/habits';
-import { getGoal } from '@/server/services/goals';
-import { getProject } from '@/server/services/projects';
-import { getRelationsForItem } from '@/server/services/relations';
+import {
+  getConnectionSuggestionsForItem,
+  getResolvedRelationsForItem,
+  getStructuralConnectionsForItem,
+} from '@/server/services/connections';
+import { getAllHabits, getHabit, getHabitCompletions } from '@/server/services/habits';
+import { getAllGoals, getGoal } from '@/server/services/goals';
+import { getAllProjects, getProject } from '@/server/services/projects';
 import { getTagsForItem } from '@/server/services/tags';
-import { todayISO, startOfWeek } from '@/lib/utils';
+import { todayISO } from '@/lib/utils';
 import { HabitDetailClient } from './client';
 
 export const metadata = { title: 'Habit — lifeOS' };
@@ -21,6 +25,8 @@ export default async function HabitDetailPage({ params }: Props) {
 
   const goal = habit.goalId ? getGoal(habit.goalId) : null;
   const project = habit.projectId ? getProject(habit.projectId) : null;
+  const goals = getAllGoals();
+  const projects = getAllProjects();
 
   // Get last 30 days of completions
   const today = todayISO();
@@ -29,29 +35,22 @@ export default async function HabitDetailPage({ params }: Props) {
   const startDate = thirtyDaysAgo.toISOString().split('T')[0];
   const completions = getHabitCompletions(id, startDate, today);
 
-  const relations = getRelationsForItem('habit', id);
+  const relatedItems = getResolvedRelationsForItem('habit', id);
+  const structuralItems = getStructuralConnectionsForItem('habit', id);
+  const suggestedItems = getConnectionSuggestionsForItem('habit', id);
   const tags = getTagsForItem('habit', id);
-
-  const relatedItems = relations.map((rel) => {
-    const isSource = rel.sourceType === 'habit' && rel.sourceId === id;
-    const otherType = isSource ? rel.targetType : rel.sourceType;
-    const otherId = isSource ? rel.targetId : rel.sourceId;
-    return {
-      relation: rel,
-      type: otherType,
-      id: otherId,
-      title: `${otherType} ${otherId.slice(0, 8)}...`,
-      direction: isSource ? 'outgoing' as const : 'incoming' as const,
-    };
-  });
 
   return (
     <HabitDetailClient
       habit={habit}
       goal={goal}
+      goals={goals.map((item) => ({ id: item.id, title: item.title }))}
       project={project}
+      projects={projects.map((item) => ({ id: item.id, title: item.title }))}
       completions={completions}
       relatedItems={relatedItems}
+      structuralItems={structuralItems}
+      suggestedItems={suggestedItems}
       tags={tags}
     />
   );

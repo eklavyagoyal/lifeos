@@ -1,18 +1,13 @@
 import type { Metadata } from 'next';
-import { Inter } from 'next/font/google';
 import './globals.css';
+import { PwaProvider } from '@/components/pwa/pwa-provider';
 import { ModeProvider } from '@/stores/mode-store';
-
-const inter = Inter({
-  subsets: ['latin'],
-  display: 'swap',
-  variable: '--font-inter',
-});
 
 export const metadata: Metadata = {
   title: 'lifeOS',
   description: 'Your personal Life Operating System',
-  icons: { icon: '/favicon.ico' },
+  manifest: '/manifest.webmanifest',
+  icons: { icon: '/icon.svg', apple: '/icon.svg' },
 };
 
 export default function RootLayout({
@@ -21,9 +16,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={inter.variable}>
+    <html lang="en">
       <body className="font-sans">
         <ModeProvider>
+          <PwaProvider />
           {children}
         </ModeProvider>
       </body>

@@ -9,6 +9,7 @@ import { TagsPills } from '@/components/detail/tags-pills';
 import { RelationsPanel } from '@/components/detail/relations-panel';
 import { updateHabitAction, archiveHabitAction, toggleHabitAction } from '@/app/actions';
 import { formatDate } from '@/lib/utils';
+import type { ConnectionItem, ConnectionSuggestion } from '@/lib/types';
 import { Flame, Target, FolderKanban } from 'lucide-react';
 import { DOMAIN_LABELS, DOMAIN_ICONS } from '@/lib/constants';
 
@@ -37,6 +38,16 @@ interface Completion {
   completedDate: string;
 }
 
+interface GoalOption {
+  id: string;
+  title: string;
+}
+
+interface ProjectOption {
+  id: string;
+  title: string;
+}
+
 interface Tag {
   id: string;
   name: string;
@@ -44,20 +55,8 @@ interface Tag {
   itemTagId: string;
 }
 
-interface RelatedItem {
-  relation: {
-    id: string;
-    sourceType: string;
-    sourceId: string;
-    targetType: string;
-    targetId: string;
-    relationType: string;
-  };
-  type: string;
-  id: string;
-  title: string;
-  direction: 'outgoing' | 'incoming';
-}
+type RelatedItem = ConnectionItem;
+type SuggestedItem = ConnectionSuggestion;
 
 const CADENCE_OPTIONS = [
   { value: 'daily', label: 'Daily' },
@@ -79,24 +78,33 @@ const DOMAIN_OPTIONS = Object.entries(DOMAIN_LABELS).map(([value, label]) => ({
 interface HabitDetailClientProps {
   habit: Habit;
   goal: { id: string; title: string } | null | undefined;
+  goals: GoalOption[];
   project: { id: string; title: string } | null | undefined;
+  projects: ProjectOption[];
   completions: Completion[];
   relatedItems: RelatedItem[];
+  structuralItems: RelatedItem[];
+  suggestedItems: SuggestedItem[];
   tags: Tag[];
 }
 
 export function HabitDetailClient({
   habit,
   goal,
+  goals,
   project,
+  projects,
   completions,
   relatedItems,
+  structuralItems,
+  suggestedItems,
   tags,
 }: HabitDetailClientProps) {
   const router = useRouter();
 
   const handleUpdate = async (field: string, value: unknown) => {
     await updateHabitAction(habit.id, { [field]: value });
+    router.refresh();
   };
 
   const handleArchive = async () => {
@@ -207,6 +215,25 @@ export function HabitDetailClient({
             type="number"
           />
         </div>
+
+        <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-2">
+          <EditableField
+            label="Goal"
+            value={habit.goalId}
+            onSave={(value) => handleUpdate('goalId', value || null)}
+            type="select"
+            options={goals.map((item) => ({ value: item.id, label: item.title }))}
+            emptyLabel="No goal linked"
+          />
+          <EditableField
+            label="Project"
+            value={habit.projectId}
+            onSave={(value) => handleUpdate('projectId', value || null)}
+            type="select"
+            options={projects.map((item) => ({ value: item.id, label: item.title }))}
+            emptyLabel="No project linked"
+          />
+        </div>
       </div>
 
       {/* Linked Goal / Project */}
@@ -251,6 +278,17 @@ export function HabitDetailClient({
         />
       </div>
 
+      <div className="card">
+        <EditableField
+          label="Notes"
+          value={habit.body}
+          onSave={(value) => handleUpdate('body', value)}
+          type="textarea"
+          placeholder="Prompts, setup notes, and nuance..."
+          emptyLabel="Add notes..."
+        />
+      </div>
+
       {/* Tags */}
       <div className="card">
         <h3 className="text-2xs font-medium uppercase tracking-wider text-text-muted mb-2">Tags</h3>
@@ -258,7 +296,13 @@ export function HabitDetailClient({
       </div>
 
       {/* Relations */}
-      <RelationsPanel items={relatedItems} />
+      <RelationsPanel
+        items={relatedItems}
+        structuralItems={structuralItems}
+        suggestions={suggestedItems}
+        currentItemType="habit"
+        currentItemId={habit.id}
+      />
     </DetailPageShell>
   );
 }

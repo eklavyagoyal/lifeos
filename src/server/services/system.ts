@@ -8,7 +8,9 @@ import { db } from '@/server/db';
 import { appSettings } from '@/server/db/schema';
 import { eq } from 'drizzle-orm';
 import { getDBPath } from './export';
+import { APP_VERSION } from '@/lib/app-info';
 import os from 'os';
+import path from 'path';
 
 // ============================================================
 // App Settings
@@ -45,13 +47,15 @@ export interface SystemInfo {
   uptime: string;
   dbPath: string;
   dataDir: string;
+  attachmentsPath: string;
   authConfigured: boolean;
   environment: string;
 }
 
 export function getSystemInfo(): SystemInfo {
   const dbPath = getDBPath();
-  const dataDir = dbPath.replace(/\/[^/]+$/, '');
+  const dataDir = path.dirname(dbPath);
+  const attachmentsPath = process.env.ATTACHMENTS_PATH || path.join(dataDir, 'attachments');
 
   const authSecret = process.env.AUTH_SECRET;
   const authConfigured = !!authSecret &&
@@ -65,13 +69,14 @@ export function getSystemInfo(): SystemInfo {
   const uptime = hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
 
   return {
-    appVersion: '0.1.0',
+    appVersion: APP_VERSION,
     nodeVersion: process.version,
     platform: `${os.type()} ${os.release()}`,
     architecture: os.arch(),
     uptime,
     dbPath,
     dataDir,
+    attachmentsPath,
     authConfigured,
     environment: process.env.NODE_ENV || 'development',
   };

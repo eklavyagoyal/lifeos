@@ -1,75 +1,27 @@
 import { db } from '../db';
+import { sqlite } from '../db';
 import { inboxItems } from '../db/schema';
-import { eq, desc } from 'drizzle-orm';
+import { eq, desc, inArray } from 'drizzle-orm';
 import { newId, now } from '@/lib/utils';
-import type { ItemType, CaptureParseResult } from '@/lib/types';
-
-/** Parse raw capture text into a suggested type */
-export function parseCapture(text: string): CaptureParseResult {
-  const lower = text.toLowerCase().trim();
-
-  // Command prefix parsing
-  const prefixes: [string[], ItemType, number][] = [
-    [['task:', 'todo:', 'do:'], 'task', 0.9],
-    [['idea:', 'idea -'], 'idea', 0.9],
-    [['note:', 'note -'], 'note', 0.9],
-    [['journal:', 'j:', 'reflect:'], 'journal', 0.9],
-    [['mood', 'energy', 'sleep'], 'metric', 0.7],
-    [['expense', 'spent', 'bought', 'paid'], 'metric', 0.7],
-    [['symptom', 'headache', 'pain', 'sick'], 'metric', 0.7],
-    [['workout', 'exercise', 'ran', 'gym'], 'metric', 0.7],
-    [['book:', 'reading:', 'article:'], 'entity', 0.8],
-    [['person:', 'people:'], 'entity', 0.8],
-  ];
-
-  for (const [patterns, type, confidence] of prefixes) {
-    for (const pattern of patterns) {
-      if (lower.startsWith(pattern)) {
-        const title = text.slice(pattern.length).trim() || text;
-        const metadata: Record<string, unknown> = {};
-
-        // Extract mood/energy values
-        if (type === 'metric') {
-          const moodMatch = lower.match(/mood\s*(\d+)/);
-          const energyMatch = lower.match(/energy\s*(\d+)/);
-          const sleepMatch = lower.match(/sleep\s*([\d.]+)/);
-          const expenseMatch = lower.match(/(?:expense|spent|paid)\s*([\d.]+)/);
-
-          if (moodMatch) metadata.metricType = 'mood';
-          if (energyMatch) metadata.metricType = 'energy';
-          if (sleepMatch) metadata.metricType = 'sleep';
-          if (expenseMatch) metadata.metricType = 'expense';
-        }
-
-        return { suggestedType: type, title, metadata, confidence };
-      }
-    }
-  }
-
-  // Default: if it looks like a task, suggest task; otherwise inbox
-  if (lower.includes('buy') || lower.includes('call') || lower.includes('fix') || lower.includes('send')) {
-    return { suggestedType: 'task', title: text, metadata: {}, confidence: 0.5 };
-  }
-
-  return { suggestedType: 'inbox', title: text, metadata: {}, confidence: 0.3 };
-}
+import type { CaptureParseResult } from '@/lib/types';
+import { buildCapturePreview } from './capture';
 
 /** Capture an item to inbox */
-export function captureToInbox(rawText: string) {
+export function captureToInbox(rawText: string, parsed?: CaptureParseResult) {
   const id = newId();
   const timestamp = now();
-  const parsed = parseCapture(rawText);
+  const preview = parsed ?? buildCapturePreview(rawText);
 
   db.insert(inboxItems).values({
     id,
     rawText,
-    parsedType: parsed.suggestedType,
+    parsedType: preview.suggestedType,
     status: 'pending',
     createdAt: timestamp,
     updatedAt: timestamp,
   }).run();
 
-  return { id, parsed };
+  return { id, parsed: preview };
 }
 
 /** Get pending inbox items */
@@ -79,17 +31,34 @@ export function getPendingInboxItems() {
     .from(inboxItems)
     .where(eq(inboxItems.status, 'pending'))
     .orderBy(desc(inboxItems.createdAt))
-    .all();
+    .all()
+    .map((item) => ({
+      ...item,
+      preview: buildCapturePreview(item.rawText),
+    }));
+}
+
+/** Get pending inbox items by IDs */
+export function getPendingInboxItemsByIds(ids: string[]) {
+  if (ids.length === 0) return [];
+
+  return db
+    .select()
+    .from(inboxItems)
+    .where(inArray(inboxItems.id, ids))
+    .all()
+    .filter((item) => item.status === 'pending');
 }
 
 /** Get inbox count */
 export function getInboxCount(): number {
-  const result = db
-    .select()
-    .from(inboxItems)
-    .where(eq(inboxItems.status, 'pending'))
-    .all();
-  return result.length;
+  const row = sqlite.prepare(`
+    SELECT COUNT(*) AS count
+    FROM inbox_items
+    WHERE status = 'pending'
+  `).get() as { count: number };
+
+  return row.count;
 }
 
 /** Triage an inbox item */

@@ -5,7 +5,7 @@ export const metadata = { title: 'Graph Explorer — lifeOS' };
 export const dynamic = 'force-dynamic';
 
 export default function GraphPage() {
-  const graph = getFullGraph();
+  const graph = getFullGraph({ includeTagEdges: true });
   const allTags = getGraphTags();
 
   return (

@@ -7,6 +7,7 @@ import { TagsPills } from '@/components/detail/tags-pills';
 import { RelationsPanel } from '@/components/detail/relations-panel';
 import { updateMetricAction, deleteMetricAction } from '@/app/actions';
 import { formatDate, formatISODate } from '@/lib/utils';
+import type { ConnectionItem, ConnectionSuggestion } from '@/lib/types';
 import {
   METRIC_TYPE_LABELS,
   METRIC_TYPE_ICONS,
@@ -36,20 +37,8 @@ interface Tag {
   itemTagId: string;
 }
 
-interface RelatedItem {
-  relation: {
-    id: string;
-    sourceType: string;
-    sourceId: string;
-    targetType: string;
-    targetId: string;
-    relationType: string;
-  };
-  type: string;
-  id: string;
-  title: string;
-  direction: 'outgoing' | 'incoming';
-}
+type RelatedItem = ConnectionItem;
+type SuggestedItem = ConnectionSuggestion;
 
 function formatValueDisplay(metric: Metric): string {
   const { metricType, valueNumeric, valueText, unit } = metric;
@@ -85,10 +74,18 @@ function formatValueDisplay(metric: Metric): string {
 interface MetricDetailClientProps {
   metric: Metric;
   relatedItems: RelatedItem[];
+  structuralItems: RelatedItem[];
+  suggestedItems: SuggestedItem[];
   tags: Tag[];
 }
 
-export function MetricDetailClient({ metric, relatedItems, tags }: MetricDetailClientProps) {
+export function MetricDetailClient({
+  metric,
+  relatedItems,
+  structuralItems,
+  suggestedItems,
+  tags,
+}: MetricDetailClientProps) {
   const router = useRouter();
 
   const handleUpdate = async (field: string, value: unknown) => {
@@ -168,6 +165,10 @@ export function MetricDetailClient({ metric, relatedItems, tags }: MetricDetailC
         </h3>
         <RelationsPanel
           items={relatedItems}
+          structuralItems={structuralItems}
+          suggestions={suggestedItems}
+          currentItemType="metric"
+          currentItemId={metric.id}
         />
       </div>
     </DetailPageShell>

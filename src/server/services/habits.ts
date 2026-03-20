@@ -3,6 +3,8 @@ import { habits, habitCompletions } from '../db/schema';
 import { eq, and, isNull, desc, asc } from 'drizzle-orm';
 import { newId, now, todayISO } from '@/lib/utils';
 import type { HabitCadence, LifeDomain } from '@/lib/types';
+import { removeSearchDocument, syncSearchDocument } from './search';
+import { recalculateGoalProgress, recalculateGoalsLinkedToHabit } from './progress';
 
 export interface CreateHabitInput {
   name: string;
@@ -49,6 +51,17 @@ export function createHabit(input: CreateHabitInput) {
     updatedAt: timestamp,
   }).run();
 
+  syncSearchDocument({
+    itemId: id,
+    itemType: 'habit',
+    title: input.name,
+    body: [input.description, input.body].filter(Boolean).join(' '),
+  });
+
+  if (input.goalId) {
+    recalculateGoalProgress(input.goalId);
+  }
+
   return getHabit(id);
 }
 
@@ -59,6 +72,7 @@ export function getHabit(id: string) {
 
 /** Update a habit */
 export function updateHabit(input: UpdateHabitInput) {
+  const previous = getHabit(input.id);
   const updates: Record<string, unknown> = { updatedAt: now() };
 
   if (input.name !== undefined) updates.name = input.name;
@@ -71,9 +85,24 @@ export function updateHabit(input: UpdateHabitInput) {
   if (input.domain !== undefined) updates.domain = input.domain;
   if (input.difficulty !== undefined) updates.difficulty = input.difficulty;
   if (input.scoringWeight !== undefined) updates.scoringWeight = input.scoringWeight;
+  if (input.goalId !== undefined) updates.goalId = input.goalId;
+  if (input.projectId !== undefined) updates.projectId = input.projectId;
 
   db.update(habits).set(updates).where(eq(habits.id, input.id)).run();
-  return getHabit(input.id);
+  const habit = getHabit(input.id);
+  if (habit && !habit.archivedAt) {
+    syncSearchDocument({
+      itemId: habit.id,
+      itemType: 'habit',
+      title: habit.name,
+      body: [habit.description, habit.body].filter(Boolean).join(' '),
+    });
+  }
+  if (previous?.goalId && previous.goalId !== habit?.goalId) {
+    recalculateGoalProgress(previous.goalId);
+  }
+  recalculateGoalsLinkedToHabit(input.id);
+  return habit;
 }
 
 /** Get all active habits */
@@ -116,6 +145,7 @@ export function toggleHabitCompletion(habitId: string, date?: string) {
     // Remove completion
     db.delete(habitCompletions).where(eq(habitCompletions.id, existing.id)).run();
     recalculateStreak(habitId);
+    recalculateGoalsLinkedToHabit(habitId);
     return { completed: false };
   } else {
     // Add completion
@@ -127,6 +157,7 @@ export function toggleHabitCompletion(habitId: string, date?: string) {
       createdAt: now(),
     }).run();
     recalculateStreak(habitId);
+    recalculateGoalsLinkedToHabit(habitId);
     return { completed: true };
   }
 }
@@ -205,8 +236,14 @@ export function recalculateStreak(habitId: string) {
 
 /** Archive a habit */
 export function archiveHabit(id: string) {
+  const habit = getHabit(id);
   db.update(habits)
     .set({ archivedAt: now(), updatedAt: now() })
     .where(eq(habits.id, id))
     .run();
+  removeSearchDocument(id, 'habit');
+  if (habit?.goalId) {
+    recalculateGoalProgress(habit.goalId);
+  }
+  recalculateGoalsLinkedToHabit(id);
 }

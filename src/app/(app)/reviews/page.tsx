@@ -1,8 +1,9 @@
 import { ClipboardList, Calendar, Check, Eye } from 'lucide-react';
-import { getAllReviews } from '@/server/services/reviews';
+import { formatReviewTypeLabel, getAllReviews } from '@/server/services/reviews';
 import { formatISODate, startOfWeek } from '@/lib/utils';
 import { GenerateReviewButton } from './generate-button';
 import Link from 'next/link';
+import type { ReviewType } from '@/lib/types';
 
 export const metadata = { title: 'Reviews — lifeOS' };
 export const dynamic = 'force-dynamic';
@@ -65,7 +66,7 @@ export default function ReviewsPage() {
                   </div>
                   <div className="min-w-0">
                     <p className="text-sm font-medium text-text-primary">
-                      Weekly Review
+                      {formatReviewTypeLabel(review.reviewType as ReviewType)}
                     </p>
                     <p className="text-xs text-text-tertiary">
                       {formatISODate(review.periodStart)} → {formatISODate(review.periodEnd!)}

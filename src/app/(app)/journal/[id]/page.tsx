@@ -1,6 +1,11 @@
 import { notFound } from 'next/navigation';
+import {
+  getConnectionSuggestionsForItem,
+  getResolvedRelationsForItem,
+  getStructuralConnectionsForItem,
+} from '@/server/services/connections';
+import { getAttachmentsForItem } from '@/server/services/attachments';
 import { getJournalEntry } from '@/server/services/journal';
-import { getRelationsForItem } from '@/server/services/relations';
 import { getTagsForItem } from '@/server/services/tags';
 import { JournalDetailClient } from './client';
 
@@ -16,27 +21,20 @@ export default async function JournalDetailPage({ params }: Props) {
   const entry = getJournalEntry(id);
   if (!entry) notFound();
 
-  const relations = getRelationsForItem('journal', id);
+  const relatedItems = getResolvedRelationsForItem('journal', id);
+  const structuralItems = getStructuralConnectionsForItem('journal', id);
+  const suggestedItems = getConnectionSuggestionsForItem('journal', id);
   const tags = getTagsForItem('journal', id);
-
-  const relatedItems = relations.map((rel) => {
-    const isSource = rel.sourceType === 'journal' && rel.sourceId === id;
-    const otherType = isSource ? rel.targetType : rel.sourceType;
-    const otherId = isSource ? rel.targetId : rel.sourceId;
-    return {
-      relation: rel,
-      type: otherType,
-      id: otherId,
-      title: `${otherType} ${otherId.slice(0, 8)}...`,
-      direction: isSource ? 'outgoing' as const : 'incoming' as const,
-    };
-  });
+  const attachments = getAttachmentsForItem('journal', id);
 
   return (
     <JournalDetailClient
       entry={entry}
       relatedItems={relatedItems}
+      structuralItems={structuralItems}
+      suggestedItems={suggestedItems}
       tags={tags}
+      attachments={attachments}
     />
   );
 }

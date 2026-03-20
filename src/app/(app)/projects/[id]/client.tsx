@@ -1,9 +1,11 @@
 'use client';
 
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { DetailPageShell } from '@/components/detail/detail-page-shell';
 import { EditableField } from '@/components/detail/editable-field';
 import { StatusBadge } from '@/components/detail/status-badge';
+import { AttachmentsPanel, type AttachmentListItem } from '@/components/detail/attachments-panel';
 import { ProgressBar } from '@/components/detail/progress-bar';
 import { TagsPills } from '@/components/detail/tags-pills';
 import { RelationsPanel } from '@/components/detail/relations-panel';
@@ -11,10 +13,10 @@ import { TaskList } from '@/components/tasks/task-list';
 import {
   updateProjectAction,
   archiveProjectAction,
-  createTaskAction,
 } from '@/app/actions';
 import { formatDate, formatISODate } from '@/lib/utils';
-import { Calendar, CheckSquare } from 'lucide-react';
+import type { ConnectionItem, ConnectionSuggestion } from '@/lib/types';
+import { Calendar, CheckSquare, Target } from 'lucide-react';
 
 interface Task {
   id: string;
@@ -33,20 +35,8 @@ interface Tag {
   itemTagId: string;
 }
 
-interface RelatedItem {
-  relation: {
-    id: string;
-    sourceType: string;
-    sourceId: string;
-    targetType: string;
-    targetId: string;
-    relationType: string;
-  };
-  type: string;
-  id: string;
-  title: string;
-  direction: 'outgoing' | 'incoming';
-}
+type RelatedItem = ConnectionItem;
+type SuggestedItem = ConnectionSuggestion;
 
 interface Project {
   id: string;
@@ -59,17 +49,33 @@ interface Project {
   targetDate: string | null;
   endDate: string | null;
   progress: number | null;
+  goalId: string | null;
   reviewCadence: string | null;
   createdAt: number;
   updatedAt: number;
   archivedAt: number | null;
 }
 
+interface Goal {
+  id: string;
+  title: string;
+}
+
+interface GoalOption {
+  id: string;
+  title: string;
+}
+
 interface ProjectDetailClientProps {
   project: Project;
+  goal: Goal | null | undefined;
+  goals: GoalOption[];
   tasks: Task[];
   relatedItems: RelatedItem[];
+  structuralItems: RelatedItem[];
+  suggestedItems: SuggestedItem[];
   tags: Tag[];
+  attachments: AttachmentListItem[];
 }
 
 const STATUS_OPTIONS = [
@@ -94,14 +100,20 @@ const CADENCE_OPTIONS = [
 
 export function ProjectDetailClient({
   project,
+  goal,
+  goals,
   tasks,
   relatedItems,
+  structuralItems,
+  suggestedItems,
   tags,
+  attachments,
 }: ProjectDetailClientProps) {
   const router = useRouter();
 
   const handleUpdate = async (field: string, value: unknown) => {
     await updateProjectAction(project.id, { [field]: value });
+    router.refresh();
   };
 
   const handleArchive = async () => {
@@ -172,16 +184,42 @@ export function ProjectDetailClient({
             </span>
             <p className="text-sm text-text-primary">{formatDate(project.createdAt)}</p>
           </div>
-          {project.endDate && (
-            <div className="space-y-0.5">
-              <span className="text-2xs font-medium uppercase tracking-wider text-text-muted">
-                Ended
-              </span>
-              <p className="text-sm text-text-primary">{formatISODate(project.endDate)}</p>
-            </div>
-          )}
+        </div>
+
+        <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-2">
+          <EditableField
+            label="Goal"
+            value={project.goalId}
+            onSave={(value) => handleUpdate('goalId', value || null)}
+            type="select"
+            options={goals.map((item) => ({ value: item.id, label: item.title }))}
+            emptyLabel="No goal linked"
+          />
+          <div className="space-y-0.5">
+            <span className="text-2xs font-medium uppercase tracking-wider text-text-muted">
+              Ended
+            </span>
+            <p className="text-sm text-text-primary">
+              {project.endDate ? formatISODate(project.endDate) : 'Not ended'}
+            </p>
+          </div>
         </div>
       </div>
+
+      {goal ? (
+        <div className="card">
+          <span className="text-2xs font-medium uppercase tracking-wider text-text-muted">
+            Linked Goal
+          </span>
+          <Link
+            href={`/goals/${goal.id}`}
+            className="mt-1 flex items-center gap-2 text-sm text-brand-600 transition-colors hover:text-brand-700"
+          >
+            <Target size={14} />
+            {goal.title}
+          </Link>
+        </div>
+      ) : null}
 
       {/* Summary / Description */}
       <div className="card">
@@ -215,6 +253,8 @@ export function ProjectDetailClient({
         <TagsPills itemType="project" itemId={project.id} tags={tags} />
       </div>
 
+      <AttachmentsPanel itemType="project" itemId={project.id} attachments={attachments} />
+
       {/* Project Tasks */}
       <div className="card">
         <div className="mb-3 flex items-center justify-between">
@@ -236,7 +276,13 @@ export function ProjectDetailClient({
       </div>
 
       {/* Relations */}
-      <RelationsPanel items={relatedItems} />
+      <RelationsPanel
+        items={relatedItems}
+        structuralItems={structuralItems}
+        suggestions={suggestedItems}
+        currentItemType="project"
+        currentItemId={project.id}
+      />
     </DetailPageShell>
   );
 }

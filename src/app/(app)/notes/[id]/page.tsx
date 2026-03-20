@@ -1,6 +1,11 @@
 import { notFound } from 'next/navigation';
+import {
+  getConnectionSuggestionsForItem,
+  getResolvedRelationsForItem,
+  getStructuralConnectionsForItem,
+} from '@/server/services/connections';
+import { getAttachmentsForItem } from '@/server/services/attachments';
 import { getNote } from '@/server/services/notes';
-import { getRelationsForItem } from '@/server/services/relations';
 import { getTagsForItem } from '@/server/services/tags';
 import { NoteDetailClient } from './client';
 
@@ -16,27 +21,20 @@ export default async function NoteDetailPage({ params }: Props) {
   const note = getNote(id);
   if (!note) notFound();
 
-  const relations = getRelationsForItem('note', id);
+  const relatedItems = getResolvedRelationsForItem('note', id);
+  const structuralItems = getStructuralConnectionsForItem('note', id);
+  const suggestedItems = getConnectionSuggestionsForItem('note', id);
   const tags = getTagsForItem('note', id);
-
-  const relatedItems = relations.map((rel) => {
-    const isSource = rel.sourceType === 'note' && rel.sourceId === id;
-    const otherType = isSource ? rel.targetType : rel.sourceType;
-    const otherId = isSource ? rel.targetId : rel.sourceId;
-    return {
-      relation: rel,
-      type: otherType,
-      id: otherId,
-      title: `${otherType} ${otherId.slice(0, 8)}...`,
-      direction: isSource ? 'outgoing' as const : 'incoming' as const,
-    };
-  });
+  const attachments = getAttachmentsForItem('note', id);
 
   return (
     <NoteDetailClient
       note={note}
       relatedItems={relatedItems}
+      structuralItems={structuralItems}
+      suggestedItems={suggestedItems}
       tags={tags}
+      attachments={attachments}
     />
   );
 }

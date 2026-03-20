@@ -95,7 +95,7 @@ export interface IdeasSummary {
   titles: string[];
 }
 
-export interface WeeklySnapshot {
+export interface ReviewSnapshot {
   periodStart: string;
   periodEnd: string;
   generatedAt: number;
@@ -110,6 +110,8 @@ export interface WeeklySnapshot {
   blockers: string[];
   focusAreas: string[];
 }
+
+export type WeeklySnapshot = ReviewSnapshot;
 
 // ============================================================
 // Aggregators
@@ -360,7 +362,7 @@ export function aggregateIdeas(start: string, end: string): IdeasSummary {
 // Insight Generators — deterministic rules
 // ============================================================
 
-export function deriveWins(snapshot: Omit<WeeklySnapshot, 'wins' | 'blockers' | 'focusAreas'>): string[] {
+export function deriveWins(snapshot: Omit<ReviewSnapshot, 'wins' | 'blockers' | 'focusAreas'>): string[] {
   const wins: string[] = [];
 
   if (snapshot.tasks.completed > 0) {
@@ -396,7 +398,7 @@ export function deriveWins(snapshot: Omit<WeeklySnapshot, 'wins' | 'blockers' | 
   return wins.length > 0 ? wins : ['Keep going — every week builds momentum'];
 }
 
-export function deriveBlockers(snapshot: Omit<WeeklySnapshot, 'wins' | 'blockers' | 'focusAreas'>): string[] {
+export function deriveBlockers(snapshot: Omit<ReviewSnapshot, 'wins' | 'blockers' | 'focusAreas'>): string[] {
   const blockers: string[] = [];
 
   if (snapshot.tasks.overdue > 0) {
@@ -423,7 +425,7 @@ export function deriveBlockers(snapshot: Omit<WeeklySnapshot, 'wins' | 'blockers
   return blockers;
 }
 
-export function deriveFocusAreas(snapshot: Omit<WeeklySnapshot, 'wins' | 'blockers' | 'focusAreas'>): string[] {
+export function deriveFocusAreas(snapshot: Omit<ReviewSnapshot, 'wins' | 'blockers' | 'focusAreas'>): string[] {
   const focus: string[] = [];
 
   if (snapshot.tasks.overdue > 0) {
@@ -459,7 +461,7 @@ export function deriveFocusAreas(snapshot: Omit<WeeklySnapshot, 'wins' | 'blocke
 // Full Snapshot Builder
 // ============================================================
 
-export function buildWeeklySnapshot(start: string, end: string): WeeklySnapshot {
+export function buildReviewSnapshot(start: string, end: string): ReviewSnapshot {
   const taskData = aggregateTasks(start, end);
   const habitData = aggregateHabits(start, end);
   const metricData = aggregateMetrics(start, end);
@@ -487,4 +489,8 @@ export function buildWeeklySnapshot(start: string, end: string): WeeklySnapshot 
     blockers: deriveBlockers(partial),
     focusAreas: deriveFocusAreas(partial),
   };
+}
+
+export function buildWeeklySnapshot(start: string, end: string): WeeklySnapshot {
+  return buildReviewSnapshot(start, end);
 }

@@ -2,6 +2,7 @@ import { db } from '../db';
 import { journalEntries } from '../db/schema';
 import { eq, and, isNull, desc } from 'drizzle-orm';
 import { newId, now, todayISO, currentTime, wordCount } from '@/lib/utils';
+import { removeSearchDocument, syncSearchDocument } from './search';
 
 export interface CreateJournalInput {
   title?: string;
@@ -37,6 +38,13 @@ export function createJournalEntry(input: CreateJournalInput) {
     updatedAt: timestamp,
   }).run();
 
+  syncSearchDocument({
+    itemId: id,
+    itemType: 'journal',
+    title: input.title ?? input.entryDate ?? todayISO(),
+    body: input.body ?? '',
+  });
+
   return getJournalEntry(id);
 }
 
@@ -61,7 +69,16 @@ export function updateJournalEntry(input: UpdateJournalInput) {
   if (input.energy !== undefined) updates.energy = input.energy;
 
   db.update(journalEntries).set(updates).where(eq(journalEntries.id, input.id)).run();
-  return getJournalEntry(input.id);
+  const entry = getJournalEntry(input.id);
+  if (entry && !entry.archivedAt) {
+    syncSearchDocument({
+      itemId: entry.id,
+      itemType: 'journal',
+      title: entry.title ?? entry.entryDate,
+      body: entry.body ?? '',
+    });
+  }
+  return entry;
 }
 
 /** Get all journal entries, newest first */
@@ -101,4 +118,5 @@ export function archiveJournalEntry(id: string) {
     .set({ archivedAt: now(), updatedAt: now() })
     .where(eq(journalEntries.id, id))
     .run();
+  removeSearchDocument(id, 'journal');
 }

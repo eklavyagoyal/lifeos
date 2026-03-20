@@ -27,6 +27,7 @@ export const tasks = sqliteTable('tasks', {
   energyRequired: text('energy_required', { enum: ['low', 'medium', 'high'] }),
   context: text('context'),
   projectId: text('project_id').references(() => projects.id),
+  goalId: text('goal_id').references(() => goals.id),
   parentTaskId: text('parent_task_id'),
   sortOrder: real('sort_order').default(0),
   source: text('source', { enum: ['manual', 'inbox', 'recurrence', 'review'] }).default('manual'),
@@ -37,6 +38,7 @@ export const tasks = sqliteTable('tasks', {
   index('idx_tasks_status').on(table.status),
   index('idx_tasks_due_date').on(table.dueDate),
   index('idx_tasks_project').on(table.projectId),
+  index('idx_tasks_goal').on(table.goalId),
   index('idx_tasks_scheduled').on(table.scheduledDate),
 ]);
 
@@ -153,12 +155,14 @@ export const projects = sqliteTable('projects', {
   targetDate: text('target_date'),
   endDate: text('end_date'),
   progress: integer('progress').default(0), // 0-100
+  goalId: text('goal_id').references(() => goals.id),
   reviewCadence: text('review_cadence', { enum: ['weekly', 'biweekly', 'monthly'] }),
   createdAt: integer('created_at').notNull(),
   updatedAt: integer('updated_at').notNull(),
   archivedAt: integer('archived_at'),
 }, (table) => [
   index('idx_projects_status').on(table.status),
+  index('idx_projects_goal').on(table.goalId),
 ]);
 
 // ----------------------------------------------------------
@@ -180,6 +184,33 @@ export const goals = sqliteTable('goals', {
   archivedAt: integer('archived_at'),
 }, (table) => [
   index('idx_goals_status').on(table.status),
+]);
+
+// ----------------------------------------------------------
+// MILESTONES
+// ----------------------------------------------------------
+export const milestones = sqliteTable('milestones', {
+  id: text('id').primaryKey(),
+  goalId: text('goal_id').notNull().references(() => goals.id, { onDelete: 'cascade' }),
+  title: text('title').notNull(),
+  body: text('body'),
+  status: text('status', { enum: ['planned', 'active', 'done', 'cancelled'] }).notNull().default('planned'),
+  targetDate: text('target_date'),
+  completedAt: integer('completed_at'),
+  progress: integer('progress').default(0),
+  sortOrder: real('sort_order').default(0),
+  projectId: text('project_id').references(() => projects.id),
+  taskId: text('task_id').references(() => tasks.id),
+  habitId: text('habit_id').references(() => habits.id),
+  createdAt: integer('created_at').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+  archivedAt: integer('archived_at'),
+}, (table) => [
+  index('idx_milestones_goal').on(table.goalId),
+  index('idx_milestones_status').on(table.status),
+  index('idx_milestones_project').on(table.projectId),
+  index('idx_milestones_task').on(table.taskId),
+  index('idx_milestones_habit').on(table.habitId),
 ]);
 
 // ----------------------------------------------------------
@@ -278,6 +309,144 @@ export const templates = sqliteTable('templates', {
   createdAt: integer('created_at').notNull(),
   updatedAt: integer('updated_at').notNull(),
 });
+
+// ----------------------------------------------------------
+// ATTACHMENTS
+// ----------------------------------------------------------
+export const attachments = sqliteTable('attachments', {
+  id: text('id').primaryKey(),
+  originalName: text('original_name').notNull(),
+  storagePath: text('storage_path').notNull(),
+  mimeType: text('mime_type'),
+  fileExtension: text('file_extension'),
+  fileSize: integer('file_size').notNull(),
+  sha256: text('sha256').notNull(),
+  sourceType: text('source_type', { enum: ['upload', 'import'] }).notNull().default('upload'),
+  searchText: text('search_text'),
+  searchSummary: text('search_summary'),
+  searchStatus: text('search_status', {
+    enum: ['pending', 'indexed', 'unsupported', 'failed']
+  }).notNull().default('pending'),
+  extractedAt: integer('extracted_at'),
+  metadata: text('metadata'),
+  createdAt: integer('created_at').notNull(),
+  archivedAt: integer('archived_at'),
+}, (table) => [
+  uniqueIndex('idx_attachments_storage_path').on(table.storagePath),
+  index('idx_attachments_sha256').on(table.sha256),
+  index('idx_attachments_source_type').on(table.sourceType),
+  index('idx_attachments_search_status').on(table.searchStatus),
+]);
+
+// ----------------------------------------------------------
+// ATTACHMENT LINKS
+// ----------------------------------------------------------
+export const attachmentLinks = sqliteTable('attachment_links', {
+  id: text('id').primaryKey(),
+  attachmentId: text('attachment_id').notNull().references(() => attachments.id, { onDelete: 'cascade' }),
+  itemType: text('item_type').notNull(),
+  itemId: text('item_id').notNull(),
+  label: text('label'),
+  createdAt: integer('created_at').notNull(),
+}, (table) => [
+  index('idx_attachment_links_item').on(table.itemType, table.itemId),
+  index('idx_attachment_links_attachment').on(table.attachmentId),
+  uniqueIndex('idx_attachment_links_unique').on(table.attachmentId, table.itemType, table.itemId),
+]);
+
+// ----------------------------------------------------------
+// IMPORT RUNS
+// ----------------------------------------------------------
+export const importRuns = sqliteTable('import_runs', {
+  id: text('id').primaryKey(),
+  importType: text('import_type', {
+    enum: ['todoist_csv', 'notion_export', 'obsidian_vault', 'day_one_json']
+  }).notNull(),
+  sourcePath: text('source_path').notNull(),
+  sourceLabel: text('source_label'),
+  mode: text('mode', { enum: ['preview', 'import'] }).notNull(),
+  status: text('status', { enum: ['running', 'completed', 'failed'] }).notNull(),
+  summary: text('summary'),
+  warnings: text('warnings'),
+  stats: text('stats'),
+  details: text('details'),
+  startedAt: integer('started_at').notNull(),
+  completedAt: integer('completed_at'),
+  createdAt: integer('created_at').notNull(),
+}, (table) => [
+  index('idx_import_runs_type').on(table.importType),
+  index('idx_import_runs_status').on(table.status),
+  index('idx_import_runs_created').on(table.createdAt),
+]);
+
+// ----------------------------------------------------------
+// IMPORTED RECORDS
+// ----------------------------------------------------------
+export const importedRecords = sqliteTable('imported_records', {
+  id: text('id').primaryKey(),
+  importRunId: text('import_run_id').references(() => importRuns.id, { onDelete: 'set null' }),
+  importType: text('import_type', {
+    enum: ['todoist_csv', 'notion_export', 'obsidian_vault', 'day_one_json']
+  }).notNull(),
+  sourceRecordKey: text('source_record_key').notNull(),
+  sourceChecksum: text('source_checksum'),
+  sourceLabel: text('source_label'),
+  itemType: text('item_type').notNull(),
+  itemId: text('item_id').notNull(),
+  createdAt: integer('created_at').notNull(),
+}, (table) => [
+  uniqueIndex('idx_imported_records_unique').on(table.importType, table.sourceRecordKey),
+  index('idx_imported_records_item').on(table.itemType, table.itemId),
+  index('idx_imported_records_run').on(table.importRunId),
+]);
+
+// ----------------------------------------------------------
+// SCHEDULED JOBS
+// ----------------------------------------------------------
+export const scheduledJobs = sqliteTable('scheduled_jobs', {
+  id: text('id').primaryKey(),
+  jobKey: text('job_key').notNull(),
+  jobType: text('job_type', {
+    enum: ['recurring_task', 'project_review', 'review_generation', 'stale_project_scan']
+  }).notNull(),
+  subjectType: text('subject_type'),
+  subjectId: text('subject_id'),
+  cadence: text('cadence'),
+  nextRunAt: integer('next_run_at'),
+  lastRunAt: integer('last_run_at'),
+  lastSuccessAt: integer('last_success_at'),
+  lastError: text('last_error'),
+  metadata: text('metadata'),
+  isActive: integer('is_active').default(1).notNull(),
+  createdAt: integer('created_at').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+}, (table) => [
+  uniqueIndex('idx_scheduled_jobs_key').on(table.jobKey),
+  index('idx_scheduled_jobs_due').on(table.isActive, table.nextRunAt),
+  index('idx_scheduled_jobs_type').on(table.jobType),
+  index('idx_scheduled_jobs_subject').on(table.subjectType, table.subjectId),
+]);
+
+// ----------------------------------------------------------
+// JOB RUNS
+// ----------------------------------------------------------
+export const jobRuns = sqliteTable('job_runs', {
+  id: text('id').primaryKey(),
+  jobId: text('job_id').notNull().references(() => scheduledJobs.id, { onDelete: 'cascade' }),
+  runKey: text('run_key').notNull(),
+  status: text('status', {
+    enum: ['running', 'succeeded', 'failed', 'skipped']
+  }).notNull(),
+  summary: text('summary'),
+  details: text('details'),
+  startedAt: integer('started_at').notNull(),
+  completedAt: integer('completed_at'),
+  createdAt: integer('created_at').notNull(),
+}, (table) => [
+  uniqueIndex('idx_job_runs_run_key').on(table.runKey),
+  index('idx_job_runs_job').on(table.jobId, table.startedAt),
+  index('idx_job_runs_status').on(table.status),
+]);
 
 // ----------------------------------------------------------
 // INBOX ITEMS

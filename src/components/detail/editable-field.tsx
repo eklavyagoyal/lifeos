@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Pencil } from 'lucide-react';
 import { cn } from '@/lib/cn';
 
@@ -25,6 +25,14 @@ export function EditableField({
 }: EditableFieldProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState(value ?? '');
+  const selectedOption = useMemo(
+    () => (type === 'select' ? options?.find((option) => option.value === value) : undefined),
+    [options, type, value]
+  );
+
+  useEffect(() => {
+    setEditValue(value ?? '');
+  }, [value]);
 
   const handleSave = () => {
     onSave(editValue);
@@ -128,7 +136,7 @@ export function EditableField({
           value ? 'text-text-primary' : 'text-text-muted italic'
         )}
       >
-        {value || emptyLabel}
+        {selectedOption?.label || value || emptyLabel}
       </p>
     </div>
   );

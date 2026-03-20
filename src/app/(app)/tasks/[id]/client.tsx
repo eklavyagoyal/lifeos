@@ -9,9 +9,9 @@ import { TagsPills } from '@/components/detail/tags-pills';
 import { RelationsPanel } from '@/components/detail/relations-panel';
 import { updateTaskAction, archiveTaskAction, toggleTaskAction } from '@/app/actions';
 import { formatDate } from '@/lib/utils';
-import { Circle, CheckCircle2, FolderKanban } from 'lucide-react';
+import type { ConnectionItem, ConnectionSuggestion } from '@/lib/types';
+import { Circle, CheckCircle2, FolderKanban, Target } from 'lucide-react';
 import { cn } from '@/lib/cn';
-import { PRIORITY_LABELS } from '@/lib/constants';
 
 interface Task {
   id: string;
@@ -22,6 +22,7 @@ interface Task {
   dueDate: string | null;
   scheduledDate: string | null;
   projectId: string | null;
+  goalId: string | null;
   parentTaskId: string | null;
   effortEstimate: string | null;
   energyRequired: string | null;
@@ -37,6 +38,16 @@ interface Project {
   title: string;
 }
 
+interface Goal {
+  id: string;
+  title: string;
+}
+
+interface GoalOption {
+  id: string;
+  title: string;
+}
+
 interface Tag {
   id: string;
   name: string;
@@ -44,20 +55,8 @@ interface Tag {
   itemTagId: string;
 }
 
-interface RelatedItem {
-  relation: {
-    id: string;
-    sourceType: string;
-    sourceId: string;
-    targetType: string;
-    targetId: string;
-    relationType: string;
-  };
-  type: string;
-  id: string;
-  title: string;
-  direction: 'outgoing' | 'incoming';
-}
+type RelatedItem = ConnectionItem;
+type SuggestedItem = ConnectionSuggestion;
 
 const STATUS_OPTIONS = [
   { value: 'inbox', label: 'Inbox' },
@@ -91,14 +90,22 @@ const ENERGY_OPTIONS = [
 interface TaskDetailClientProps {
   task: Task;
   project: Project | null | undefined;
+  goal: Goal | null | undefined;
+  goals: GoalOption[];
   relatedItems: RelatedItem[];
+  structuralItems: RelatedItem[];
+  suggestedItems: SuggestedItem[];
   tags: Tag[];
 }
 
 export function TaskDetailClient({
   task,
   project,
+  goal,
+  goals,
   relatedItems,
+  structuralItems,
+  suggestedItems,
   tags,
 }: TaskDetailClientProps) {
   const router = useRouter();
@@ -106,10 +113,12 @@ export function TaskDetailClient({
 
   const handleUpdate = async (field: string, value: unknown) => {
     await updateTaskAction(task.id, { [field]: value });
+    router.refresh();
   };
 
   const handleToggle = async () => {
     await toggleTaskAction(task.id);
+    router.refresh();
   };
 
   const handleArchive = async () => {
@@ -199,21 +208,56 @@ export function TaskDetailClient({
             <p className="text-sm text-text-primary">{formatDate(task.createdAt)}</p>
           </div>
         </div>
+
+        <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-2">
+          <EditableField
+            label="Goal"
+            value={task.goalId}
+            onSave={(value) => handleUpdate('goalId', value || null)}
+            type="select"
+            options={goals.map((item) => ({ value: item.id, label: item.title }))}
+            emptyLabel="No goal linked"
+          />
+          <div className="space-y-0.5">
+            <span className="text-2xs font-medium uppercase tracking-wider text-text-muted">
+              Last Updated
+            </span>
+            <p className="text-sm text-text-primary">{formatDate(task.updatedAt)}</p>
+          </div>
+        </div>
       </div>
 
-      {/* Project link */}
-      {project && (
+      {/* Project / Goal links */}
+      {(project || goal) && (
         <div className="card">
-          <span className="text-2xs font-medium uppercase tracking-wider text-text-muted">
-            Project
-          </span>
-          <Link
-            href={`/projects/${project.id}`}
-            className="mt-1 flex items-center gap-2 text-sm text-brand-600 hover:text-brand-700 transition-colors"
-          >
-            <FolderKanban size={14} />
-            {project.title}
-          </Link>
+          {goal ? (
+            <div className={project ? 'mb-3' : undefined}>
+              <span className="text-2xs font-medium uppercase tracking-wider text-text-muted">
+                Goal
+              </span>
+              <Link
+                href={`/goals/${goal.id}`}
+                className="mt-1 flex items-center gap-2 text-sm text-brand-600 hover:text-brand-700 transition-colors"
+              >
+                <Target size={14} />
+                {goal.title}
+              </Link>
+            </div>
+          ) : null}
+          {project ? (
+            <div>
+              <span className="text-2xs font-medium uppercase tracking-wider text-text-muted">
+                Project
+              </span>
+              <Link
+                href={`/projects/${project.id}`}
+                className="mt-1 flex items-center gap-2 text-sm text-brand-600 hover:text-brand-700 transition-colors"
+              >
+                <FolderKanban size={14} />
+                {project.title}
+              </Link>
+            </div>
+          ) : null}
         </div>
       )}
 
@@ -236,7 +280,13 @@ export function TaskDetailClient({
       </div>
 
       {/* Relations */}
-      <RelationsPanel items={relatedItems} />
+      <RelationsPanel
+        items={relatedItems}
+        structuralItems={structuralItems}
+        suggestions={suggestedItems}
+        currentItemType="task"
+        currentItemId={task.id}
+      />
     </DetailPageShell>
   );
 }

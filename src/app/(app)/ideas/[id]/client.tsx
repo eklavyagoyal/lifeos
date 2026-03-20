@@ -4,10 +4,12 @@ import { useRouter } from 'next/navigation';
 import { DetailPageShell } from '@/components/detail/detail-page-shell';
 import { EditableField } from '@/components/detail/editable-field';
 import { StatusBadge } from '@/components/detail/status-badge';
+import { AttachmentsPanel, type AttachmentListItem } from '@/components/detail/attachments-panel';
 import { TagsPills } from '@/components/detail/tags-pills';
 import { RelationsPanel } from '@/components/detail/relations-panel';
 import { updateIdeaAction, archiveIdeaAction } from '@/app/actions';
 import { formatDate } from '@/lib/utils';
+import type { ConnectionItem, ConnectionSuggestion } from '@/lib/types';
 
 interface Idea {
   id: string;
@@ -27,20 +29,8 @@ interface Tag {
   itemTagId: string;
 }
 
-interface RelatedItem {
-  relation: {
-    id: string;
-    sourceType: string;
-    sourceId: string;
-    targetType: string;
-    targetId: string;
-    relationType: string;
-  };
-  type: string;
-  id: string;
-  title: string;
-  direction: 'outgoing' | 'incoming';
-}
+type RelatedItem = ConnectionItem;
+type SuggestedItem = ConnectionSuggestion;
 
 const STAGE_OPTIONS = [
   { value: 'seed', label: '🌱 Seed' },
@@ -53,13 +43,19 @@ const STAGE_OPTIONS = [
 interface IdeaDetailClientProps {
   idea: Idea;
   relatedItems: RelatedItem[];
+  structuralItems: RelatedItem[];
+  suggestedItems: SuggestedItem[];
   tags: Tag[];
+  attachments: AttachmentListItem[];
 }
 
 export function IdeaDetailClient({
   idea,
   relatedItems,
+  structuralItems,
+  suggestedItems,
   tags,
+  attachments,
 }: IdeaDetailClientProps) {
   const router = useRouter();
 
@@ -145,8 +141,16 @@ export function IdeaDetailClient({
         <TagsPills itemType="idea" itemId={idea.id} tags={tags} />
       </div>
 
+      <AttachmentsPanel itemType="idea" itemId={idea.id} attachments={attachments} />
+
       {/* Relations */}
-      <RelationsPanel items={relatedItems} />
+      <RelationsPanel
+        items={relatedItems}
+        structuralItems={structuralItems}
+        suggestions={suggestedItems}
+        currentItemType="idea"
+        currentItemId={idea.id}
+      />
     </DetailPageShell>
   );
 }

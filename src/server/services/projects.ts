@@ -1,8 +1,11 @@
 import { db } from '../db';
 import { projects, tasks } from '../db/schema';
-import { eq, and, isNull, desc, asc } from 'drizzle-orm';
+import { eq, and, isNull, desc, asc, ne } from 'drizzle-orm';
 import { newId, now } from '@/lib/utils';
-import type { ProjectStatus, ProjectHealth } from '@/lib/types';
+import type { ProjectStatus, ProjectHealth, ReviewCadence } from '@/lib/types';
+import { removeSearchDocument, syncSearchDocument } from './search';
+import { syncProjectReviewJob } from './scheduler';
+import { recalculateGoalsLinkedToProject, recalculateProjectProgress as recalculateProjectProgressValue } from './progress';
 
 export interface CreateProjectInput {
   title: string;
@@ -12,7 +15,8 @@ export interface CreateProjectInput {
   health?: ProjectHealth;
   startDate?: string;
   targetDate?: string;
-  reviewCadence?: string;
+  goalId?: string;
+  reviewCadence?: ReviewCadence;
 }
 
 export interface UpdateProjectInput extends Partial<CreateProjectInput> {
@@ -37,10 +41,21 @@ export function createProject(input: CreateProjectInput) {
     targetDate: input.targetDate ?? null,
     endDate: null,
     progress: 0,
-    reviewCadence: (input.reviewCadence as 'weekly' | 'biweekly' | 'monthly') ?? null,
+    goalId: input.goalId ?? null,
+    reviewCadence: input.reviewCadence ?? null,
     createdAt: timestamp,
     updatedAt: timestamp,
   }).run();
+
+  syncSearchDocument({
+    itemId: id,
+    itemType: 'project',
+    title: input.title,
+    body: [input.summary, input.body].filter(Boolean).join(' '),
+  });
+
+  syncProjectReviewJob(id);
+  recalculateGoalsLinkedToProject(id);
 
   return getProject(id);
 }
@@ -69,10 +84,22 @@ export function updateProject(input: UpdateProjectInput) {
   if (input.targetDate !== undefined) updates.targetDate = input.targetDate;
   if (input.endDate !== undefined) updates.endDate = input.endDate;
   if (input.progress !== undefined) updates.progress = Math.max(0, Math.min(100, input.progress));
+  if (input.goalId !== undefined) updates.goalId = input.goalId;
   if (input.reviewCadence !== undefined) updates.reviewCadence = input.reviewCadence;
 
   db.update(projects).set(updates).where(eq(projects.id, input.id)).run();
-  return getProject(input.id);
+  const project = getProject(input.id);
+  if (project && !project.archivedAt) {
+    syncSearchDocument({
+      itemId: project.id,
+      itemType: 'project',
+      title: project.title,
+      body: [project.summary, project.body].filter(Boolean).join(' '),
+    });
+  }
+  syncProjectReviewJob(input.id);
+  recalculateGoalsLinkedToProject(input.id);
+  return project;
 }
 
 /** Get all active projects (not archived) */
@@ -100,23 +127,14 @@ export function getProjectTasks(projectId: string) {
   return db
     .select()
     .from(tasks)
-    .where(and(eq(tasks.projectId, projectId), isNull(tasks.archivedAt)))
+    .where(and(eq(tasks.projectId, projectId), isNull(tasks.archivedAt), ne(tasks.source, 'review')))
     .orderBy(asc(tasks.sortOrder), desc(tasks.createdAt))
     .all();
 }
 
 /** Recalculate project progress from task completion */
 export function recalculateProjectProgress(projectId: string) {
-  const projectTasks = getProjectTasks(projectId);
-  if (projectTasks.length === 0) return;
-
-  const doneTasks = projectTasks.filter(t => t.status === 'done').length;
-  const progress = Math.round((doneTasks / projectTasks.length) * 100);
-
-  db.update(projects)
-    .set({ progress, updatedAt: now() })
-    .where(eq(projects.id, projectId))
-    .run();
+  return recalculateProjectProgressValue(projectId);
 }
 
 /** Archive a project */
@@ -125,4 +143,7 @@ export function archiveProject(id: string) {
     .set({ archivedAt: now(), updatedAt: now() })
     .where(eq(projects.id, id))
     .run();
+  removeSearchDocument(id, 'project');
+  syncProjectReviewJob(id);
+  recalculateGoalsLinkedToProject(id);
 }

@@ -1,4 +1,5 @@
 import { Sidebar } from '@/components/layout/sidebar';
+import { assertDatabaseReadyForRequests } from '@/server/services/runtime';
 
 /**
  * App layout — wraps all authenticated routes with the sidebar.
@@ -9,6 +10,10 @@ export default function AppLayout({
 }: {
   children: React.ReactNode;
 }) {
+  if (process.env.NODE_ENV !== 'test' && process.env.NEXT_PHASE !== 'phase-production-build') {
+    assertDatabaseReadyForRequests();
+  }
+
   return (
     <div className="flex min-h-screen">
       <Sidebar />

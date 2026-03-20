@@ -1,8 +1,13 @@
 import { notFound } from 'next/navigation';
+import {
+  getConnectionSuggestionsForItem,
+  getResolvedRelationsForItem,
+  getStructuralConnectionsForItem,
+} from '@/server/services/connections';
+import { getAttachmentsForItem } from '@/server/services/attachments';
 import { getProject, getProjectTasks } from '@/server/services/projects';
-import { getRelationsForItem } from '@/server/services/relations';
+import { getAllGoals, getGoal } from '@/server/services/goals';
 import { getTagsForItem } from '@/server/services/tags';
-import { formatDate, formatISODate } from '@/lib/utils';
 import { ProjectDetailClient } from './client';
 
 export const metadata = { title: 'Project — lifeOS' };
@@ -18,30 +23,25 @@ export default async function ProjectDetailPage({ params }: Props) {
   if (!project) notFound();
 
   const tasks = getProjectTasks(id);
-  const relations = getRelationsForItem('project', id);
+  const goal = project.goalId ? getGoal(project.goalId) : null;
+  const goals = getAllGoals();
+  const relatedItems = getResolvedRelationsForItem('project', id);
+  const structuralItems = getStructuralConnectionsForItem('project', id);
+  const suggestedItems = getConnectionSuggestionsForItem('project', id);
   const tags = getTagsForItem('project', id);
-
-  // Resolve related item titles for the relations panel
-  const relatedItems = relations.map((rel) => {
-    const isSource = rel.sourceType === 'project' && rel.sourceId === id;
-    const otherType = isSource ? rel.targetType : rel.sourceType;
-    const otherId = isSource ? rel.targetId : rel.sourceId;
-
-    return {
-      relation: rel,
-      type: otherType,
-      id: otherId,
-      title: `${otherType} ${otherId.slice(0, 8)}...`,
-      direction: isSource ? 'outgoing' as const : 'incoming' as const,
-    };
-  });
+  const attachments = getAttachmentsForItem('project', id);
 
   return (
     <ProjectDetailClient
       project={project}
+      goal={goal}
+      goals={goals.map((item) => ({ id: item.id, title: item.title }))}
       tasks={tasks}
       relatedItems={relatedItems}
+      structuralItems={structuralItems}
+      suggestedItems={suggestedItems}
       tags={tags}
+      attachments={attachments}
     />
   );
 }

@@ -1,16 +1,21 @@
 'use client';
 
-import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  Network, Filter, ZoomIn, ZoomOut, Maximize2, X, Tag,
+  Filter,
+  Focus,
+  Maximize2,
+  Network,
+  Save,
+  Tag,
+  X,
+  ZoomIn,
+  ZoomOut,
 } from 'lucide-react';
 import { cn } from '@/lib/cn';
-import type { GraphNode, GraphEdge, ItemType } from '@/lib/types';
+import type { GraphEdge, GraphNode } from '@/lib/types';
 
-// ----------------------------------------------------------
-// Type colors matching graph-helpers.ts
-// ----------------------------------------------------------
 const TYPE_COLORS: Record<string, string> = {
   task: '#3b82f6',
   habit: '#8b5cf6',
@@ -27,27 +32,78 @@ const TYPE_COLORS: Record<string, string> = {
 };
 
 const TYPE_LABELS: Record<string, string> = {
-  task: 'Tasks', habit: 'Habits', journal: 'Journal', note: 'Notes',
-  idea: 'Ideas', project: 'Projects', goal: 'Goals', metric: 'Metrics',
-  entity: 'Entities', event: 'Events', review: 'Reviews',
+  task: 'Tasks',
+  habit: 'Habits',
+  journal: 'Journal',
+  note: 'Notes',
+  idea: 'Ideas',
+  project: 'Projects',
+  goal: 'Goals',
+  metric: 'Metrics',
+  entity: 'Entities',
+  event: 'Events',
+  review: 'Reviews',
 };
 
-const EDGE_TYPE_STYLES: Record<string, { color: string; dash?: string }> = {
+const EDGE_TYPE_LABELS: Record<GraphEdge['edgeType'], string> = {
+  relation: 'Explicit relations',
+  structural: 'Structural links',
+  tag: 'Shared tags',
+  attachment: 'Shared attachments',
+};
+
+const EDGE_TYPE_STYLES: Record<GraphEdge['edgeType'], { color: string; dash?: string }> = {
   relation: { color: 'var(--color-text-tertiary)' },
   structural: { color: 'var(--color-brand-400)', dash: '4 2' },
   tag: { color: 'var(--color-text-muted)', dash: '2 4' },
+  attachment: { color: 'var(--color-brand-600)', dash: '6 3' },
 };
 
 const NODE_RADIUS = 18;
 const CANVAS_SIZE = 1000;
+const STORAGE_KEY = 'lifeos.graph.filters.v1';
 
-// ----------------------------------------------------------
-// Props
-// ----------------------------------------------------------
 interface Props {
   initialNodes: GraphNode[];
   initialEdges: GraphEdge[];
   availableTags: { id: string; name: string; color: string | null }[];
+}
+
+interface SavedFilters {
+  enabledTypes?: string[];
+  enabledEdgeTypes?: GraphEdge['edgeType'][];
+  selectedTagId?: string;
+  focusDepth?: 1 | 2;
+}
+
+function computeNeighborhood(
+  selectedNodeId: string,
+  nodes: GraphNode[],
+  edges: GraphEdge[],
+  depth: 1 | 2
+) {
+  const visited = new Set<string>([selectedNodeId]);
+  let frontier = new Set<string>([selectedNodeId]);
+
+  for (let level = 0; level < depth; level += 1) {
+    const nextFrontier = new Set<string>();
+    for (const edge of edges) {
+      if (frontier.has(edge.sourceId) && !visited.has(edge.targetId)) {
+        nextFrontier.add(edge.targetId);
+        visited.add(edge.targetId);
+      }
+      if (frontier.has(edge.targetId) && !visited.has(edge.sourceId)) {
+        nextFrontier.add(edge.sourceId);
+        visited.add(edge.sourceId);
+      }
+    }
+    frontier = nextFrontier;
+  }
+
+  return {
+    nodes: nodes.filter((node) => visited.has(node.id)),
+    edges: edges.filter((edge) => visited.has(edge.sourceId) && visited.has(edge.targetId)),
+  };
 }
 
 export function GraphClient({ initialNodes, initialEdges, availableTags }: Props) {
@@ -55,7 +111,6 @@ export function GraphClient({ initialNodes, initialEdges, availableTags }: Props
   const svgRef = useRef<SVGSVGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // State
   const [nodes] = useState(initialNodes);
   const [edges] = useState(initialEdges);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
@@ -63,57 +118,125 @@ export function GraphClient({ initialNodes, initialEdges, availableTags }: Props
   const [showFilters, setShowFilters] = useState(false);
   const [enabledTypes, setEnabledTypes] = useState<Set<string>>(() => {
     const types = new Set<string>();
-    for (const n of initialNodes) types.add(n.type);
+    for (const node of initialNodes) types.add(node.type);
     return types;
   });
+  const [enabledEdgeTypes, setEnabledEdgeTypes] = useState<Set<GraphEdge['edgeType']>>(
+    new Set<GraphEdge['edgeType']>(['relation', 'structural', 'tag', 'attachment'])
+  );
+  const [selectedTagId, setSelectedTagId] = useState('');
+  const [focusMode, setFocusMode] = useState(false);
+  const [focusDepth, setFocusDepth] = useState<1 | 2>(1);
+  const [preferencesLoaded, setPreferencesLoaded] = useState(false);
 
-  // Pan / Zoom state
   const [viewBox, setViewBox] = useState({ x: 0, y: 0, w: CANVAS_SIZE, h: CANVAS_SIZE });
   const [isPanning, setIsPanning] = useState(false);
   const [panStart, setPanStart] = useState({ x: 0, y: 0 });
 
-  // Filtered data
-  const filteredNodes = useMemo(
-    () => nodes.filter(n => enabledTypes.has(n.type)),
-    [nodes, enabledTypes]
-  );
-  const filteredNodeIds = useMemo(
-    () => new Set(filteredNodes.map(n => n.id)),
-    [filteredNodes]
-  );
-  const filteredEdges = useMemo(
-    () => edges.filter(e => filteredNodeIds.has(e.sourceId) && filteredNodeIds.has(e.targetId)),
-    [edges, filteredNodeIds]
-  );
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) {
+        setPreferencesLoaded(true);
+        return;
+      }
 
-  // Selected node info
-  const selectedNode = selectedNodeId ? nodes.find(n => n.id === selectedNodeId) : null;
-  const hoveredNode = hoveredNodeId ? nodes.find(n => n.id === hoveredNodeId) : null;
-
-  // Neighbor highlight
-  const neighborIds = useMemo(() => {
-    if (!selectedNodeId) return new Set<string>();
-    const ids = new Set<string>();
-    for (const e of filteredEdges) {
-      if (e.sourceId === selectedNodeId) ids.add(e.targetId);
-      if (e.targetId === selectedNodeId) ids.add(e.sourceId);
+      const parsed = JSON.parse(raw) as SavedFilters;
+      if (Array.isArray(parsed.enabledTypes) && parsed.enabledTypes.length > 0) {
+        setEnabledTypes(new Set(parsed.enabledTypes));
+      }
+      if (Array.isArray(parsed.enabledEdgeTypes) && parsed.enabledEdgeTypes.length > 0) {
+        setEnabledEdgeTypes(new Set(parsed.enabledEdgeTypes));
+      }
+      if (parsed.selectedTagId && availableTags.some((tag) => tag.id === parsed.selectedTagId)) {
+        setSelectedTagId(parsed.selectedTagId);
+      }
+      if (parsed.focusDepth === 2) {
+        setFocusDepth(2);
+      }
+    } catch {
+      // Ignore malformed saved filters and fall back to defaults.
+    } finally {
+      setPreferencesLoaded(true);
     }
-    ids.add(selectedNodeId);
+  }, [availableTags]);
+
+  useEffect(() => {
+    if (!preferencesLoaded) return;
+
+    const payload: SavedFilters = {
+      enabledTypes: [...enabledTypes],
+      enabledEdgeTypes: [...enabledEdgeTypes],
+      selectedTagId,
+      focusDepth,
+    };
+
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+  }, [enabledEdgeTypes, enabledTypes, focusDepth, preferencesLoaded, selectedTagId]);
+
+  const baseNodes = useMemo(() => {
+    return nodes.filter((node) => {
+      if (!enabledTypes.has(node.type)) return false;
+      if (selectedTagId && !(node.tagIds ?? []).includes(selectedTagId)) return false;
+      return true;
+    });
+  }, [enabledTypes, nodes, selectedTagId]);
+
+  const baseNodeIds = useMemo(() => new Set(baseNodes.map((node) => node.id)), [baseNodes]);
+
+  const baseEdges = useMemo(() => {
+    return edges.filter((edge) => {
+      if (!enabledEdgeTypes.has(edge.edgeType)) return false;
+      return baseNodeIds.has(edge.sourceId) && baseNodeIds.has(edge.targetId);
+    });
+  }, [baseNodeIds, edges, enabledEdgeTypes]);
+
+  const focusedGraph = useMemo(() => {
+    if (!focusMode || !selectedNodeId || !baseNodeIds.has(selectedNodeId)) {
+      return { nodes: baseNodes, edges: baseEdges };
+    }
+
+    return computeNeighborhood(selectedNodeId, baseNodes, baseEdges, focusDepth);
+  }, [baseEdges, baseNodeIds, baseNodes, focusDepth, focusMode, selectedNodeId]);
+
+  const visibleNodes = focusedGraph.nodes;
+  const visibleEdges = focusedGraph.edges;
+  const visibleNodeIds = useMemo(() => new Set(visibleNodes.map((node) => node.id)), [visibleNodes]);
+
+  const selectedNode = selectedNodeId ? nodes.find((node) => node.id === selectedNodeId) ?? null : null;
+  const hoveredNode = hoveredNodeId ? nodes.find((node) => node.id === hoveredNodeId) ?? null : null;
+
+  const neighborIds = useMemo(() => {
+    if (!selectedNodeId || !visibleNodeIds.has(selectedNodeId)) return new Set<string>();
+
+    const ids = new Set<string>([selectedNodeId]);
+    for (const edge of visibleEdges) {
+      if (edge.sourceId === selectedNodeId) ids.add(edge.targetId);
+      if (edge.targetId === selectedNodeId) ids.add(edge.sourceId);
+    }
     return ids;
-  }, [selectedNodeId, filteredEdges]);
+  }, [selectedNodeId, visibleEdges, visibleNodeIds]);
 
-  // Node positions map for edge drawing
   const nodeMap = useMemo(() => {
-    const m = new Map<string, GraphNode>();
-    for (const n of filteredNodes) m.set(n.id, n);
-    return m;
-  }, [filteredNodes]);
+    const map = new Map<string, GraphNode>();
+    for (const node of visibleNodes) {
+      map.set(node.id, node);
+    }
+    return map;
+  }, [visibleNodes]);
 
-  // ----------------------------------------------------------
-  // Interaction handlers
-  // ----------------------------------------------------------
+  const typeCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const node of nodes) {
+      counts[node.type] = (counts[node.type] ?? 0) + 1;
+    }
+    return counts;
+  }, [nodes]);
+
+  const availableTypes = useMemo(() => Object.keys(typeCounts).sort(), [typeCounts]);
+
   const handleNodeClick = useCallback((nodeId: string) => {
-    setSelectedNodeId(prev => prev === nodeId ? null : nodeId);
+    setSelectedNodeId((previous) => (previous === nodeId ? null : nodeId));
   }, []);
 
   const handleNodeDoubleClick = useCallback((node: GraphNode) => {
@@ -121,114 +244,164 @@ export function GraphClient({ initialNodes, initialEdges, availableTags }: Props
   }, [router]);
 
   const handleZoom = useCallback((factor: number) => {
-    setViewBox(prev => {
-      const newW = Math.max(200, Math.min(2000, prev.w * factor));
-      const newH = Math.max(200, Math.min(2000, prev.h * factor));
-      const dx = (prev.w - newW) / 2;
-      const dy = (prev.h - newH) / 2;
-      return { x: prev.x + dx, y: prev.y + dy, w: newW, h: newH };
+    setViewBox((previous) => {
+      const nextWidth = Math.max(200, Math.min(2000, previous.w * factor));
+      const nextHeight = Math.max(200, Math.min(2000, previous.h * factor));
+      const dx = (previous.w - nextWidth) / 2;
+      const dy = (previous.h - nextHeight) / 2;
+      return { x: previous.x + dx, y: previous.y + dy, w: nextWidth, h: nextHeight };
     });
   }, []);
 
-  const handleReset = useCallback(() => {
+  const handleResetView = useCallback(() => {
     setViewBox({ x: 0, y: 0, w: CANVAS_SIZE, h: CANVAS_SIZE });
-    setSelectedNodeId(null);
   }, []);
 
-  const handleWheel = useCallback((e: React.WheelEvent) => {
-    e.preventDefault();
-    const factor = e.deltaY > 0 ? 1.1 : 0.9;
-    handleZoom(factor);
+  const handleResetFilters = useCallback(() => {
+    setEnabledTypes(new Set(availableTypes));
+    setEnabledEdgeTypes(new Set<GraphEdge['edgeType']>(['relation', 'structural', 'tag', 'attachment']));
+    setSelectedTagId('');
+    setFocusDepth(1);
+    setFocusMode(false);
+    localStorage.removeItem(STORAGE_KEY);
+  }, [availableTypes]);
+
+  const handleWheel = useCallback((event: React.WheelEvent) => {
+    event.preventDefault();
+    handleZoom(event.deltaY > 0 ? 1.1 : 0.9);
   }, [handleZoom]);
 
-  const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    if (e.target === svgRef.current || (e.target as Element).tagName === 'line' || (e.target as Element).tagName === 'rect') {
+  const handleMouseDown = useCallback((event: React.MouseEvent) => {
+    if (
+      event.target === svgRef.current
+      || (event.target as Element).tagName === 'line'
+      || (event.target as Element).tagName === 'rect'
+    ) {
       setIsPanning(true);
-      setPanStart({ x: e.clientX, y: e.clientY });
+      setPanStart({ x: event.clientX, y: event.clientY });
     }
   }, []);
 
-  const handleMouseMove = useCallback((e: React.MouseEvent) => {
+  const handleMouseMove = useCallback((event: React.MouseEvent) => {
     if (!isPanning) return;
-    const dx = (e.clientX - panStart.x) * (viewBox.w / (containerRef.current?.clientWidth ?? 800));
-    const dy = (e.clientY - panStart.y) * (viewBox.h / (containerRef.current?.clientHeight ?? 600));
-    setViewBox(prev => ({ ...prev, x: prev.x - dx, y: prev.y - dy }));
-    setPanStart({ x: e.clientX, y: e.clientY });
-  }, [isPanning, panStart, viewBox.w, viewBox.h]);
 
-  const handleMouseUp = useCallback(() => setIsPanning(false), []);
+    const dx = (event.clientX - panStart.x) * (viewBox.w / (containerRef.current?.clientWidth ?? 800));
+    const dy = (event.clientY - panStart.y) * (viewBox.h / (containerRef.current?.clientHeight ?? 600));
 
-  // Toggle type filter
+    setViewBox((previous) => ({
+      ...previous,
+      x: previous.x - dx,
+      y: previous.y - dy,
+    }));
+    setPanStart({ x: event.clientX, y: event.clientY });
+  }, [isPanning, panStart.x, panStart.y, viewBox.h, viewBox.w]);
+
   const toggleType = useCallback((type: string) => {
-    setEnabledTypes(prev => {
-      const next = new Set(prev);
+    setEnabledTypes((previous) => {
+      const next = new Set(previous);
       if (next.has(type)) next.delete(type);
       else next.add(type);
       return next;
     });
   }, []);
 
-  // Count by type
-  const typeCounts = useMemo(() => {
-    const counts: Record<string, number> = {};
-    for (const n of nodes) {
-      counts[n.type] = (counts[n.type] ?? 0) + 1;
-    }
-    return counts;
-  }, [nodes]);
+  const toggleEdgeType = useCallback((edgeType: GraphEdge['edgeType']) => {
+    setEnabledEdgeTypes((previous) => {
+      const next = new Set(previous);
+      if (next.has(edgeType)) next.delete(edgeType);
+      else next.add(edgeType);
+      return next;
+    });
+  }, []);
 
-  // Available types (only types that have nodes)
-  const availableTypes = useMemo(
-    () => Object.keys(typeCounts).sort(),
-    [typeCounts]
-  );
+  const selectedTag = selectedTagId
+    ? availableTags.find((tag) => tag.id === selectedTagId) ?? null
+    : null;
 
   return (
-    <div className="flex flex-col h-[calc(100vh-4rem)]">
-      {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-surface-3">
-        <div className="flex items-center gap-3">
-          <Network size={20} className="text-brand-500" />
-          <h1 className="text-lg font-semibold text-text-primary">Graph Explorer</h1>
-          <span className="text-2xs text-text-muted">
-            {filteredNodes.length} nodes · {filteredEdges.length} edges
-          </span>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setShowFilters(!showFilters)}
-            className={cn(
-              'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm transition-colors',
-              showFilters
-                ? 'bg-brand-100 text-brand-700'
-                : 'text-text-muted hover:bg-surface-2'
-            )}
-          >
-            <Filter size={14} />
-            Filters
-          </button>
-          <button onClick={() => handleZoom(0.8)} className="p-1.5 rounded-md text-text-muted hover:bg-surface-2 transition-colors" title="Zoom In">
-            <ZoomIn size={16} />
-          </button>
-          <button onClick={() => handleZoom(1.25)} className="p-1.5 rounded-md text-text-muted hover:bg-surface-2 transition-colors" title="Zoom Out">
-            <ZoomOut size={16} />
-          </button>
-          <button onClick={handleReset} className="p-1.5 rounded-md text-text-muted hover:bg-surface-2 transition-colors" title="Reset View">
-            <Maximize2 size={16} />
-          </button>
+    <div className="flex h-[calc(100vh-4rem)] flex-col">
+      <div className="border-b border-surface-3 px-4 py-3">
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <Network size={20} className="text-brand-500" />
+            <div>
+              <h1 className="text-lg font-semibold text-text-primary">Graph Explorer</h1>
+              <p className="text-2xs text-text-muted">
+                {visibleNodes.length} nodes · {visibleEdges.length} edges
+                {focusMode && selectedNode ? ` · focused on ${selectedNode.title}` : ''}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowFilters((value) => !value)}
+              className={cn(
+                'flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm transition-colors',
+                showFilters ? 'bg-brand-100 text-brand-700' : 'text-text-muted hover:bg-surface-2'
+              )}
+            >
+              <Filter size={14} />
+              Filters
+            </button>
+            <button
+              onClick={() => setFocusMode((value) => !value)}
+              disabled={!selectedNode}
+              className={cn(
+                'flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm transition-colors disabled:opacity-50',
+                focusMode ? 'bg-brand-100 text-brand-700' : 'text-text-muted hover:bg-surface-2'
+              )}
+            >
+              <Focus size={14} />
+              {focusMode ? 'Show All' : 'Focus'}
+            </button>
+            <button
+              onClick={() => handleZoom(0.8)}
+              className="rounded-md p-1.5 text-text-muted transition-colors hover:bg-surface-2"
+              title="Zoom In"
+            >
+              <ZoomIn size={16} />
+            </button>
+            <button
+              onClick={() => handleZoom(1.25)}
+              className="rounded-md p-1.5 text-text-muted transition-colors hover:bg-surface-2"
+              title="Zoom Out"
+            >
+              <ZoomOut size={16} />
+            </button>
+            <button
+              onClick={handleResetView}
+              className="rounded-md p-1.5 text-text-muted transition-colors hover:bg-surface-2"
+              title="Reset View"
+            >
+              <Maximize2 size={16} />
+            </button>
+          </div>
         </div>
       </div>
 
       <div className="flex flex-1 overflow-hidden">
-        {/* Filter Panel */}
-        {showFilters && (
-          <div className="w-56 border-r border-surface-3 p-4 overflow-y-auto flex-shrink-0 space-y-4">
-            {/* Type filters */}
+        {showFilters ? (
+          <div className="w-72 flex-shrink-0 space-y-5 overflow-y-auto border-r border-surface-3 p-4">
             <div>
-              <h3 className="text-xs font-semibold text-text-secondary mb-2 uppercase tracking-wide">Node Types</h3>
+              <div className="mb-2 flex items-center gap-2">
+                <Save size={14} className="text-brand-600" />
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-text-secondary">
+                  Saved Filters
+                </h3>
+              </div>
+              <p className="text-2xs text-text-muted">
+                Type, edge, tag, and focus-depth filters auto-save on this device.
+              </p>
+            </div>
+
+            <div>
+              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-text-secondary">
+                Node Types
+              </h3>
               <div className="space-y-1">
-                {availableTypes.map(type => (
-                  <label key={type} className="flex items-center gap-2 py-1 cursor-pointer group">
+                {availableTypes.map((type) => (
+                  <label key={type} className="group flex cursor-pointer items-center gap-2 py-1">
                     <input
                       type="checkbox"
                       checked={enabledTypes.has(type)}
@@ -236,10 +409,10 @@ export function GraphClient({ initialNodes, initialEdges, availableTags }: Props
                       className="rounded border-surface-3 text-brand-500 focus:ring-brand-500"
                     />
                     <span
-                      className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                      className="h-2.5 w-2.5 flex-shrink-0 rounded-full"
                       style={{ backgroundColor: TYPE_COLORS[type] ?? '#6b7280' }}
                     />
-                    <span className="text-sm text-text-secondary group-hover:text-text-primary transition-colors flex-1">
+                    <span className="flex-1 text-sm text-text-secondary transition-colors group-hover:text-text-primary">
                       {TYPE_LABELS[type] ?? type}
                     </span>
                     <span className="text-2xs text-text-muted">{typeCounts[type] ?? 0}</span>
@@ -248,63 +421,134 @@ export function GraphClient({ initialNodes, initialEdges, availableTags }: Props
               </div>
             </div>
 
-            {/* Legend */}
             <div>
-              <h3 className="text-xs font-semibold text-text-secondary mb-2 uppercase tracking-wide">Edge Types</h3>
-              <div className="space-y-1.5">
-                <div className="flex items-center gap-2 text-2xs text-text-muted">
-                  <svg width="24" height="2"><line x1="0" y1="1" x2="24" y2="1" stroke="var(--color-text-tertiary)" strokeWidth="1.5" /></svg>
-                  Explicit relation
-                </div>
-                <div className="flex items-center gap-2 text-2xs text-text-muted">
-                  <svg width="24" height="2"><line x1="0" y1="1" x2="24" y2="1" stroke="var(--color-brand-400)" strokeWidth="1.5" strokeDasharray="4 2" /></svg>
-                  Structural (FK)
-                </div>
-                <div className="flex items-center gap-2 text-2xs text-text-muted">
-                  <svg width="24" height="2"><line x1="0" y1="1" x2="24" y2="1" stroke="var(--color-text-muted)" strokeWidth="1.5" strokeDasharray="2 4" /></svg>
-                  Shared tag
-                </div>
+              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-text-secondary">
+                Edge Types
+              </h3>
+              <div className="space-y-2">
+                {(['relation', 'structural', 'tag', 'attachment'] as const).map((edgeType) => (
+                  <label key={edgeType} className="flex cursor-pointer items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={enabledEdgeTypes.has(edgeType)}
+                      onChange={() => toggleEdgeType(edgeType)}
+                      className="rounded border-surface-3 text-brand-500 focus:ring-brand-500"
+                    />
+                    <svg width="24" height="2">
+                      <line
+                        x1="0"
+                        y1="1"
+                        x2="24"
+                        y2="1"
+                        stroke={EDGE_TYPE_STYLES[edgeType].color}
+                        strokeWidth="1.5"
+                        strokeDasharray={EDGE_TYPE_STYLES[edgeType].dash}
+                      />
+                    </svg>
+                    <span className="text-sm text-text-secondary">{EDGE_TYPE_LABELS[edgeType]}</span>
+                  </label>
+                ))}
               </div>
             </div>
 
-            {/* Quick actions */}
             <div>
-              <h3 className="text-xs font-semibold text-text-secondary mb-2 uppercase tracking-wide">Quick</h3>
-              <div className="space-y-1">
+              <div className="mb-2 flex items-center gap-2">
+                <Tag size={14} className="text-text-muted" />
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-text-secondary">
+                  Tag Filter
+                </h3>
+              </div>
+              <select
+                value={selectedTagId}
+                onChange={(event) => setSelectedTagId(event.target.value)}
+                className="w-full rounded-md border border-surface-3 bg-surface-0 px-3 py-2 text-sm text-text-primary outline-none focus:ring-2 focus:ring-brand-100"
+              >
+                <option value="">All tags</option>
+                {availableTags.map((tag) => (
+                  <option key={tag.id} value={tag.id}>
+                    {tag.name}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-2 text-2xs text-text-muted">
+                {selectedTag ? `Showing nodes tagged #${selectedTag.name}.` : 'No tag constraint applied.'}
+              </p>
+            </div>
+
+            <div>
+              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-text-secondary">
+                Focus Depth
+              </h3>
+              <div className="flex gap-2">
+                {[1, 2].map((depth) => (
+                  <button
+                    key={depth}
+                    onClick={() => setFocusDepth(depth as 1 | 2)}
+                    className={cn(
+                      'rounded-md px-3 py-1.5 text-xs font-medium transition-colors',
+                      focusDepth === depth
+                        ? 'bg-brand-100 text-brand-700'
+                        : 'bg-surface-2 text-text-secondary hover:bg-surface-3'
+                    )}
+                  >
+                    {depth}-hop
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-text-secondary">
+                Quick Views
+              </h3>
+              <div className="space-y-1 text-2xs">
                 <button
                   onClick={() => setEnabledTypes(new Set(availableTypes))}
-                  className="text-2xs text-brand-500 hover:text-brand-600 transition-colors"
+                  className="text-brand-500 transition-colors hover:text-brand-600"
                 >
                   Show all
                 </button>
-                <span className="text-2xs text-text-muted mx-1">·</span>
+                <span className="mx-1 text-text-muted">·</span>
                 <button
                   onClick={() => setEnabledTypes(new Set(['project', 'goal', 'note', 'idea']))}
-                  className="text-2xs text-brand-500 hover:text-brand-600 transition-colors"
+                  className="text-brand-500 transition-colors hover:text-brand-600"
                 >
-                  Plan only
+                  Planning view
+                </button>
+                <span className="mx-1 text-text-muted">·</span>
+                <button
+                  onClick={() => setEnabledTypes(new Set(['task', 'habit', 'review', 'event']))}
+                  className="text-brand-500 transition-colors hover:text-brand-600"
+                >
+                  Execution view
                 </button>
               </div>
             </div>
-          </div>
-        )}
 
-        {/* Graph Canvas */}
+            <button
+              onClick={handleResetFilters}
+              className="w-full rounded-md border border-surface-3 px-3 py-2 text-sm font-medium text-text-secondary transition-colors hover:bg-surface-2"
+            >
+              Reset Filters
+            </button>
+          </div>
+        ) : null}
+
         <div
           ref={containerRef}
-          className="flex-1 relative bg-surface-1 overflow-hidden cursor-grab active:cursor-grabbing"
+          className="relative flex-1 cursor-grab overflow-hidden bg-surface-1 active:cursor-grabbing"
           onMouseDown={handleMouseDown}
           onMouseMove={handleMouseMove}
-          onMouseUp={handleMouseUp}
-          onMouseLeave={handleMouseUp}
+          onMouseUp={() => setIsPanning(false)}
+          onMouseLeave={() => setIsPanning(false)}
         >
-          {filteredNodes.length === 0 ? (
+          {visibleNodes.length === 0 ? (
             <div className="absolute inset-0 flex items-center justify-center">
               <div className="text-center">
-                <Network size={32} className="mx-auto text-text-muted mb-2" />
-                <p className="text-sm text-text-muted">No connected items to display.</p>
-                <p className="text-2xs text-text-muted mt-1">
-                  Create relations between items to see the graph.
+                <Network size={32} className="mx-auto mb-2 text-text-muted" />
+                <p className="text-sm text-text-muted">No graph nodes match the active filters.</p>
+                <p className="mt-1 text-2xs text-text-muted">
+                  Try clearing the tag filter, re-enabling types, or leaving focus mode.
                 </p>
               </div>
             </div>
@@ -317,21 +561,21 @@ export function GraphClient({ initialNodes, initialEdges, availableTags }: Props
               onWheel={handleWheel}
               className="select-none"
             >
-              {/* Background */}
               <rect
-                x={viewBox.x} y={viewBox.y}
-                width={viewBox.w} height={viewBox.h}
+                x={viewBox.x}
+                y={viewBox.y}
+                width={viewBox.w}
+                height={viewBox.h}
                 fill="transparent"
               />
 
-              {/* Edges */}
               <g className="edges">
-                {filteredEdges.map(edge => {
+                {visibleEdges.map((edge) => {
                   const source = nodeMap.get(edge.sourceId);
                   const target = nodeMap.get(edge.targetId);
                   if (!source || !target) return null;
 
-                  const style = EDGE_TYPE_STYLES[edge.edgeType] ?? EDGE_TYPE_STYLES.relation;
+                  const style = EDGE_TYPE_STYLES[edge.edgeType];
                   const isHighlighted = selectedNodeId && (
                     edge.sourceId === selectedNodeId || edge.targetId === selectedNodeId
                   );
@@ -340,8 +584,10 @@ export function GraphClient({ initialNodes, initialEdges, availableTags }: Props
                   return (
                     <line
                       key={edge.id}
-                      x1={source.x} y1={source.y}
-                      x2={target.x} y2={target.y}
+                      x1={source.x}
+                      y1={source.y}
+                      x2={target.x}
+                      y2={target.y}
                       stroke={style.color}
                       strokeWidth={isHighlighted ? 2 : 1}
                       strokeDasharray={style.dash}
@@ -352,9 +598,8 @@ export function GraphClient({ initialNodes, initialEdges, availableTags }: Props
                 })}
               </g>
 
-              {/* Nodes */}
               <g className="nodes">
-                {filteredNodes.map(node => {
+                {visibleNodes.map((node) => {
                   const color = TYPE_COLORS[node.type] ?? '#6b7280';
                   const isSelected = node.id === selectedNodeId;
                   const isNeighbor = neighborIds.has(node.id);
@@ -365,15 +610,20 @@ export function GraphClient({ initialNodes, initialEdges, availableTags }: Props
                     <g
                       key={node.id}
                       transform={`translate(${node.x}, ${node.y})`}
-                      onClick={(e) => { e.stopPropagation(); handleNodeClick(node.id); }}
-                      onDoubleClick={(e) => { e.stopPropagation(); handleNodeDoubleClick(node); }}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        handleNodeClick(node.id);
+                      }}
+                      onDoubleClick={(event) => {
+                        event.stopPropagation();
+                        handleNodeDoubleClick(node);
+                      }}
                       onMouseEnter={() => setHoveredNodeId(node.id)}
                       onMouseLeave={() => setHoveredNodeId(null)}
                       className="cursor-pointer"
                       style={{ opacity: isDimmed ? 0.2 : 1, transition: 'opacity 200ms' }}
                     >
-                      {/* Selection ring */}
-                      {isSelected && (
+                      {isSelected ? (
                         <circle
                           r={NODE_RADIUS + 5}
                           fill="none"
@@ -381,8 +631,7 @@ export function GraphClient({ initialNodes, initialEdges, availableTags }: Props
                           strokeWidth={2}
                           opacity={0.5}
                         />
-                      )}
-                      {/* Node circle */}
+                      ) : null}
                       <circle
                         r={isSelected ? NODE_RADIUS + 2 : NODE_RADIUS}
                         fill={color}
@@ -390,18 +639,15 @@ export function GraphClient({ initialNodes, initialEdges, availableTags }: Props
                         stroke={isHovered ? '#fff' : 'none'}
                         strokeWidth={isHovered ? 2 : 0}
                       />
-                      {/* Label */}
                       <text
                         y={NODE_RADIUS + 14}
                         textAnchor="middle"
                         fontSize="11"
                         fill="var(--color-text-secondary)"
                         className="pointer-events-none select-none"
-                        style={{ fontFamily: 'var(--font-sans, system-ui)' }}
                       >
-                        {node.title.length > 20 ? node.title.slice(0, 18) + '…' : node.title}
+                        {node.title.length > 20 ? `${node.title.slice(0, 18)}…` : node.title}
                       </text>
-                      {/* Type initial inside circle */}
                       <text
                         textAnchor="middle"
                         dominantBaseline="central"
@@ -419,104 +665,125 @@ export function GraphClient({ initialNodes, initialEdges, availableTags }: Props
             </svg>
           )}
 
-          {/* Hover Tooltip */}
-          {hoveredNode && !selectedNode && (
-            <div className="absolute top-4 right-4 card p-3 max-w-xs pointer-events-none shadow-lg">
-              <div className="flex items-center gap-2 mb-1">
+          {hoveredNode && !selectedNode ? (
+            <div className="pointer-events-none absolute right-4 top-4 max-w-xs card p-3 shadow-lg">
+              <div className="mb-1 flex items-center gap-2">
                 <span
-                  className="w-3 h-3 rounded-full"
+                  className="h-3 w-3 rounded-full"
                   style={{ backgroundColor: TYPE_COLORS[hoveredNode.type] }}
                 />
-                <span className="text-2xs font-medium text-text-muted uppercase">
+                <span className="text-2xs font-medium uppercase text-text-muted">
                   {TYPE_LABELS[hoveredNode.type] ?? hoveredNode.type}
                 </span>
               </div>
               <p className="text-sm font-medium text-text-primary">{hoveredNode.title}</p>
-              {hoveredNode.subtitle && (
-                <p className="text-2xs text-text-muted mt-0.5">{hoveredNode.subtitle}</p>
-              )}
-              {hoveredNode.date && (
-                <p className="text-2xs text-text-muted">{hoveredNode.date}</p>
-              )}
+              {hoveredNode.subtitle ? (
+                <p className="mt-0.5 text-2xs text-text-muted">{hoveredNode.subtitle}</p>
+              ) : null}
+              {hoveredNode.date ? <p className="text-2xs text-text-muted">{hoveredNode.date}</p> : null}
+              {hoveredNode.attachmentCount ? (
+                <p className="text-2xs text-text-muted">
+                  {hoveredNode.attachmentCount} attachment{hoveredNode.attachmentCount !== 1 ? 's' : ''}
+                </p>
+              ) : null}
             </div>
-          )}
+          ) : null}
 
-          {/* Selected Node Panel */}
-          {selectedNode && (
-            <div className="absolute top-4 right-4 card p-4 w-72 shadow-lg">
-              <div className="flex items-center justify-between mb-2">
+          {selectedNode ? (
+            <div className="absolute right-4 top-4 w-80 card p-4 shadow-lg">
+              <div className="mb-2 flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <span
-                    className="w-3 h-3 rounded-full"
+                    className="h-3 w-3 rounded-full"
                     style={{ backgroundColor: TYPE_COLORS[selectedNode.type] }}
                   />
-                  <span className="text-2xs font-medium text-text-muted uppercase">
+                  <span className="text-2xs font-medium uppercase text-text-muted">
                     {TYPE_LABELS[selectedNode.type] ?? selectedNode.type}
                   </span>
                 </div>
                 <button
                   onClick={() => setSelectedNodeId(null)}
-                  className="text-text-muted hover:text-text-primary transition-colors"
+                  className="text-text-muted transition-colors hover:text-text-primary"
                 >
                   <X size={14} />
                 </button>
               </div>
 
-              <h3 className="text-sm font-semibold text-text-primary mb-1">
-                {selectedNode.title}
-              </h3>
-
-              {selectedNode.subtitle && (
-                <p className="text-2xs text-text-muted mb-1">{selectedNode.subtitle}</p>
-              )}
-              {selectedNode.status && (
-                <span className="inline-block text-2xs px-1.5 py-0.5 rounded bg-surface-2 text-text-secondary mb-1">
+              <h3 className="mb-1 text-sm font-semibold text-text-primary">{selectedNode.title}</h3>
+              {selectedNode.subtitle ? (
+                <p className="mb-1 text-2xs text-text-muted">{selectedNode.subtitle}</p>
+              ) : null}
+              {selectedNode.status ? (
+                <span className="mb-1 inline-block rounded bg-surface-2 px-1.5 py-0.5 text-2xs text-text-secondary">
                   {selectedNode.status}
                 </span>
-              )}
-              {selectedNode.date && (
-                <p className="text-2xs text-text-muted">{selectedNode.date}</p>
-              )}
-
-              {/* Connected nodes */}
-              <div className="mt-3 pt-3 border-t border-surface-3">
-                <p className="text-2xs text-text-muted mb-1.5">
-                  {neighborIds.size - 1} connection{neighborIds.size - 1 !== 1 ? 's' : ''}
+              ) : null}
+              {selectedNode.date ? <p className="text-2xs text-text-muted">{selectedNode.date}</p> : null}
+              {(selectedNode.tagIds && selectedNode.tagIds.length > 0) || selectedNode.attachmentCount ? (
+                <p className="mt-1 text-2xs text-text-muted">
+                  {[
+                    selectedNode.tagIds && selectedNode.tagIds.length > 0
+                      ? `${selectedNode.tagIds.length} tag${selectedNode.tagIds.length !== 1 ? 's' : ''}`
+                      : null,
+                    selectedNode.attachmentCount
+                      ? `${selectedNode.attachmentCount} attachment${selectedNode.attachmentCount !== 1 ? 's' : ''}`
+                      : null,
+                  ].filter(Boolean).join(' · ')}
                 </p>
-                <div className="space-y-1 max-h-32 overflow-y-auto">
-                  {filteredEdges
-                    .filter(e => e.sourceId === selectedNode.id || e.targetId === selectedNode.id)
-                    .slice(0, 10)
-                    .map(e => {
-                      const otherId = e.sourceId === selectedNode.id ? e.targetId : e.sourceId;
+              ) : null}
+
+              <div className="mt-3 flex gap-2">
+                <button
+                  onClick={() => setFocusMode((value) => !value)}
+                  className={cn(
+                    'flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition-colors',
+                    focusMode
+                      ? 'bg-brand-100 text-brand-700'
+                      : 'bg-surface-2 text-text-secondary hover:bg-surface-3'
+                  )}
+                >
+                  {focusMode ? 'Show Full Graph' : `Focus ${focusDepth}-hop`}
+                </button>
+                <button
+                  onClick={() => router.push(selectedNode.detailUrl)}
+                  className="flex-1 rounded-md bg-brand-50 px-3 py-1.5 text-xs font-medium text-brand-600 transition-colors hover:bg-brand-100 hover:text-brand-700"
+                >
+                  Open Detail
+                </button>
+              </div>
+
+              <div className="mt-3 border-t border-surface-3 pt-3">
+                <p className="mb-1.5 text-2xs text-text-muted">
+                  {neighborIds.size - 1} visible connection{neighborIds.size - 1 !== 1 ? 's' : ''}
+                </p>
+                <div className="max-h-36 space-y-1 overflow-y-auto">
+                  {visibleEdges
+                    .filter((edge) => edge.sourceId === selectedNode.id || edge.targetId === selectedNode.id)
+                    .slice(0, 12)
+                    .map((edge) => {
+                      const otherId = edge.sourceId === selectedNode.id ? edge.targetId : edge.sourceId;
                       const other = nodeMap.get(otherId);
                       if (!other) return null;
+
                       return (
                         <button
-                          key={e.id}
+                          key={edge.id}
                           onClick={() => handleNodeClick(otherId)}
-                          className="flex items-center gap-2 w-full text-left py-1 px-1.5 rounded hover:bg-surface-2 transition-colors"
+                          className="flex w-full items-center gap-2 rounded px-1.5 py-1 text-left transition-colors hover:bg-surface-2"
                         >
                           <span
-                            className="w-2 h-2 rounded-full flex-shrink-0"
+                            className="h-2 w-2 flex-shrink-0 rounded-full"
                             style={{ backgroundColor: TYPE_COLORS[other.type] }}
                           />
-                          <span className="text-2xs text-text-secondary truncate flex-1">{other.title}</span>
-                          <span className="text-2xs text-text-muted">{e.label}</span>
+                          <span className="flex-1 truncate text-2xs text-text-secondary">{other.title}</span>
+                          <span className="text-2xs text-text-muted">{edge.label}</span>
                         </button>
                       );
                     })}
                 </div>
               </div>
-
-              <button
-                onClick={() => router.push(selectedNode.detailUrl)}
-                className="mt-3 w-full py-1.5 text-xs font-medium text-brand-600 hover:text-brand-700 bg-brand-50 hover:bg-brand-100 rounded-md transition-colors text-center"
-              >
-                Open Detail →
-              </button>
             </div>
-          )}
+          ) : null}
         </div>
       </div>
     </div>

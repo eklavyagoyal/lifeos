@@ -2,6 +2,7 @@ import { db } from '../db';
 import { notes } from '../db/schema';
 import { eq, and, isNull, desc } from 'drizzle-orm';
 import { newId, now } from '@/lib/utils';
+import { removeSearchDocument, syncSearchDocument } from './search';
 
 export interface CreateNoteInput {
   title: string;
@@ -30,6 +31,13 @@ export function createNote(input: CreateNoteInput) {
     updatedAt: timestamp,
   }).run();
 
+  syncSearchDocument({
+    itemId: id,
+    itemType: 'note',
+    title: input.title,
+    body: input.body ?? '',
+  });
+
   return getNote(id);
 }
 
@@ -48,7 +56,16 @@ export function updateNote(input: UpdateNoteInput) {
   if (input.collection !== undefined) updates.collection = input.collection;
 
   db.update(notes).set(updates).where(eq(notes.id, input.id)).run();
-  return getNote(input.id);
+  const note = getNote(input.id);
+  if (note && !note.archivedAt) {
+    syncSearchDocument({
+      itemId: note.id,
+      itemType: 'note',
+      title: note.title,
+      body: note.body ?? '',
+    });
+  }
+  return note;
 }
 
 /** Get all notes */
@@ -68,4 +85,5 @@ export function archiveNote(id: string) {
     .set({ archivedAt: now(), updatedAt: now() })
     .where(eq(notes.id, id))
     .run();
+  removeSearchDocument(id, 'note');
 }

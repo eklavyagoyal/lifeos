@@ -3,6 +3,9 @@ import { tasks } from '../db/schema';
 import { eq, and, isNull, desc, asc, lte, or } from 'drizzle-orm';
 import { newId, now, todayISO } from '@/lib/utils';
 import type { TaskStatus, TaskPriority } from '@/lib/types';
+import { removeSearchDocument, syncSearchDocument } from './search';
+import { syncRecurringTaskJob } from './scheduler';
+import { recalculateGoalProgress, recalculateGoalsLinkedToTask, recalculateProjectProgress } from './progress';
 
 export interface CreateTaskInput {
   title: string;
@@ -11,7 +14,9 @@ export interface CreateTaskInput {
   priority?: TaskPriority;
   dueDate?: string;
   scheduledDate?: string;
+  recurrenceRule?: string;
   projectId?: string;
+  goalId?: string;
   parentTaskId?: string;
   effortEstimate?: string;
   energyRequired?: string;
@@ -36,7 +41,9 @@ export function createTask(input: CreateTaskInput) {
     priority: input.priority ?? null,
     dueDate: input.dueDate ?? null,
     scheduledDate: input.scheduledDate ?? null,
+    recurrenceRule: input.recurrenceRule ?? null,
     projectId: input.projectId ?? null,
+    goalId: input.goalId ?? null,
     parentTaskId: input.parentTaskId ?? null,
     effortEstimate: input.effortEstimate ?? null,
     energyRequired: input.energyRequired ?? null,
@@ -46,6 +53,21 @@ export function createTask(input: CreateTaskInput) {
     createdAt: timestamp,
     updatedAt: timestamp,
   } as typeof tasks.$inferInsert).run();
+
+  syncSearchDocument({
+    itemId: id,
+    itemType: 'task',
+    title: input.title,
+    body: input.body ?? '',
+  });
+
+  syncRecurringTaskJob(id);
+  if (input.projectId) {
+    recalculateProjectProgress(input.projectId);
+  }
+  if (input.goalId) {
+    recalculateGoalProgress(input.goalId);
+  }
 
   return getTask(id);
 }
@@ -57,6 +79,7 @@ export function getTask(id: string) {
 
 /** Update a task */
 export function updateTask(input: UpdateTaskInput) {
+  const previous = getTask(input.id);
   const updates: Record<string, unknown> = { updatedAt: now() };
 
   if (input.title !== undefined) updates.title = input.title;
@@ -72,13 +95,35 @@ export function updateTask(input: UpdateTaskInput) {
   if (input.priority !== undefined) updates.priority = input.priority;
   if (input.dueDate !== undefined) updates.dueDate = input.dueDate;
   if (input.scheduledDate !== undefined) updates.scheduledDate = input.scheduledDate;
+  if (input.recurrenceRule !== undefined) updates.recurrenceRule = input.recurrenceRule;
   if (input.projectId !== undefined) updates.projectId = input.projectId;
+  if (input.goalId !== undefined) updates.goalId = input.goalId;
   if (input.effortEstimate !== undefined) updates.effortEstimate = input.effortEstimate;
   if (input.energyRequired !== undefined) updates.energyRequired = input.energyRequired;
   if (input.context !== undefined) updates.context = input.context;
 
   db.update(tasks).set(updates).where(eq(tasks.id, input.id)).run();
-  return getTask(input.id);
+  const task = getTask(input.id);
+  if (task && !task.archivedAt) {
+    syncSearchDocument({
+      itemId: task.id,
+      itemType: 'task',
+      title: task.title,
+      body: task.body ?? '',
+    });
+  }
+  syncRecurringTaskJob(input.id);
+  const projectIds = new Set(
+    [previous?.projectId ?? null, task?.projectId ?? null].filter((value): value is string => Boolean(value))
+  );
+  for (const projectId of projectIds) {
+    recalculateProjectProgress(projectId);
+  }
+  if (previous?.goalId && previous.goalId !== task?.goalId) {
+    recalculateGoalProgress(previous.goalId);
+  }
+  recalculateGoalsLinkedToTask(input.id);
+  return task;
 }
 
 /** Toggle task completion status */
@@ -92,10 +137,20 @@ export function toggleTask(id: string) {
 
 /** Delete (archive) a task */
 export function archiveTask(id: string) {
+  const task = getTask(id);
   db.update(tasks)
     .set({ archivedAt: now(), updatedAt: now() })
     .where(eq(tasks.id, id))
     .run();
+  removeSearchDocument(id, 'task');
+  syncRecurringTaskJob(id);
+  if (task?.projectId) {
+    recalculateProjectProgress(task.projectId);
+  }
+  if (task?.goalId) {
+    recalculateGoalProgress(task.goalId);
+  }
+  recalculateGoalsLinkedToTask(id);
 }
 
 /** Get tasks for today — due today, scheduled today, or overdue */

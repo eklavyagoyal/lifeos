@@ -3,6 +3,7 @@ import { entities } from '../db/schema';
 import { eq, and, isNull, desc, inArray } from 'drizzle-orm';
 import { newId, now } from '@/lib/utils';
 import type { EntityType } from '@/lib/types';
+import { removeSearchDocument, syncSearchDocument } from './search';
 
 // ============================================================
 // Entities Service — People, Books, Articles, Courses, etc.
@@ -85,17 +86,25 @@ function parseMetadata<T = EntityMetadata>(raw: string | null): T {
 export function createEntity(input: CreateEntityInput) {
   const id = newId();
   const timestamp = now();
+  const serializedMetadata = serializeMetadata(input.metadata);
 
   db.insert(entities).values({
     id,
     title: input.title,
     entityType: input.entityType,
     body: input.body ?? null,
-    metadata: serializeMetadata(input.metadata),
+    metadata: serializedMetadata,
     isPinned: input.isPinned ? 1 : 0,
     createdAt: timestamp,
     updatedAt: timestamp,
   }).run();
+
+  syncSearchDocument({
+    itemId: id,
+    itemType: 'entity',
+    title: input.title,
+    body: [input.entityType, input.body].filter(Boolean).join(' '),
+  });
 
   return getEntity(id);
 }
@@ -117,7 +126,16 @@ export function updateEntity(input: UpdateEntityInput) {
   if (input.isPinned !== undefined) updates.isPinned = input.isPinned ? 1 : 0;
 
   db.update(entities).set(updates).where(eq(entities.id, input.id)).run();
-  return getEntity(input.id);
+  const entity = getEntity(input.id);
+  if (entity && !entity.archivedAt) {
+    syncSearchDocument({
+      itemId: entity.id,
+      itemType: 'entity',
+      title: entity.title,
+      body: [entity.entityType, entity.body].filter(Boolean).join(' '),
+    });
+  }
+  return entity;
 }
 
 /** Get all entities (optionally filtered by type) */
@@ -160,4 +178,5 @@ export function archiveEntity(id: string) {
     .set({ archivedAt: now(), updatedAt: now() })
     .where(eq(entities.id, id))
     .run();
+  removeSearchDocument(id, 'entity');
 }

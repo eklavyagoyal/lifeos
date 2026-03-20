@@ -7,6 +7,7 @@ import { TagsPills } from '@/components/detail/tags-pills';
 import { RelationsPanel } from '@/components/detail/relations-panel';
 import { updateEntityAction, archiveEntityAction } from '@/app/actions';
 import { formatDate } from '@/lib/utils';
+import type { ConnectionItem, ConnectionSuggestion } from '@/lib/types';
 import type { PersonMetadata } from '@/server/services/entities';
 
 interface Entity {
@@ -28,30 +29,22 @@ interface Tag {
   itemTagId: string;
 }
 
-interface RelatedItem {
-  relation: {
-    id: string;
-    sourceType: string;
-    sourceId: string;
-    targetType: string;
-    targetId: string;
-    relationType: string;
-  };
-  type: string;
-  id: string;
-  title: string;
-  direction: 'outgoing' | 'incoming';
-}
+type RelatedItem = ConnectionItem;
+type SuggestedItem = ConnectionSuggestion;
 
 interface PersonDetailClientProps {
   entity: Entity;
   relatedItems: RelatedItem[];
+  structuralItems: RelatedItem[];
+  suggestedItems: SuggestedItem[];
   tags: Tag[];
 }
 
 export function PersonDetailClient({
   entity,
   relatedItems,
+  structuralItems,
+  suggestedItems,
   tags,
 }: PersonDetailClientProps) {
   const router = useRouter();
@@ -147,7 +140,13 @@ export function PersonDetailClient({
       </div>
 
       {/* Relations */}
-      <RelationsPanel items={relatedItems} />
+      <RelationsPanel
+        items={relatedItems}
+        structuralItems={structuralItems}
+        suggestions={suggestedItems}
+        currentItemType="entity"
+        currentItemId={entity.id}
+      />
     </DetailPageShell>
   );
 }

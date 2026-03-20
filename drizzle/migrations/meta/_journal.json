@@ -8,6 +8,34 @@
       "when": 1773517036137,
       "tag": "0000_shallow_taskmaster",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1774008208856,
+      "tag": "0001_watery_gunslinger",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1774011484195,
+      "tag": "0002_long_nomad",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1774018864126,
+      "tag": "0003_minor_magdalene",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1774020404736,
+      "tag": "0004_brave_prowler",
+      "breakpoints": true
     }
   ]
 }

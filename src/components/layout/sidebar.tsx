@@ -24,6 +24,7 @@ import {
   ClipboardList,
   Clock,
   Search,
+  Upload,
   Settings,
   Zap,
   Moon,
@@ -89,6 +90,7 @@ const navigation: NavGroup[] = [
   {
     items: [
       { label: 'Search', href: '/search', icon: <Search size={18} /> },
+      { label: 'Imports', href: '/imports', icon: <Upload size={18} /> },
       { label: 'Settings', href: '/settings', icon: <Settings size={18} /> },
     ],
   },

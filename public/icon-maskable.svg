@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title">
+  <title>lifeOS</title>
+  <defs>
+    <linearGradient id="lifeosMaskableGradient" x1="12" x2="244" y1="12" y2="244" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#123c75" />
+      <stop offset="1" stop-color="#1f9d7a" />
+    </linearGradient>
+  </defs>
+  <rect width="256" height="256" rx="72" fill="url(#lifeosMaskableGradient)" />
+  <path d="M88 78h22v100H88zM122 78h22v61l36-61h26l-41 68 41 32h-31l-31-24v24h-22z" fill="#fff" />
+</svg>

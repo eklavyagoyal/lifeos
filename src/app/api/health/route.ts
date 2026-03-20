@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { getRuntimeDiagnostics } from '@/server/services/runtime';
 
 /**
  * Public health check endpoint.
@@ -6,9 +7,9 @@ import { NextResponse } from 'next/server';
  * Does NOT require authentication.
  */
 export async function GET() {
-  return NextResponse.json({
-    status: 'ok',
-    app: 'lifeOS',
-    timestamp: new Date().toISOString(),
+  const diagnostics = getRuntimeDiagnostics();
+
+  return NextResponse.json(diagnostics, {
+    status: diagnostics.ready ? 200 : 503,
   });
 }

@@ -41,7 +41,7 @@ const TYPE_URL_PREFIX: Record<ItemType, string> = {
   goal: '/goals',
   metric: '/metrics',
   entity: '/people',  // default; overridden by getDetailUrl for learning types
-  event: '/timeline',
+  event: '/events',
   review: '/reviews',
   inbox: '/inbox',
 };
@@ -247,9 +247,9 @@ function resolveByType(type: ItemType, ids: string[]): ResolvedItem[] {
     case 'review':
       return db.select().from(reviews).where(inArray(reviews.id, ids)).all().map(r => ({
         id: r.id, type: 'review' as const,
-        title: `${r.reviewType} Review`,
-        subtitle: `${r.periodStart} → ${r.periodEnd}`,
-        date: r.periodEnd,
+        title: `${r.reviewType[0].toUpperCase()}${r.reviewType.slice(1)} Review`,
+        subtitle: `${r.periodStart} → ${r.periodEnd ?? r.periodStart}`,
+        date: r.periodEnd ?? r.periodStart,
         detailUrl: getDetailUrl('review', r.id),
       }));
 
@@ -305,6 +305,18 @@ export function getStructuralEdges(): StructuralEdge[] {
     });
   }
 
+  // Tasks → Goals (via goalId)
+  const taskGoalRows = sqlite.prepare(
+    `SELECT id, goal_id FROM tasks WHERE goal_id IS NOT NULL AND archived_at IS NULL`
+  ).all() as { id: string; goal_id: string }[];
+  for (const row of taskGoalRows) {
+    edges.push({
+      sourceType: 'task', sourceId: row.id,
+      targetType: 'goal', targetId: row.goal_id,
+      label: 'supports',
+    });
+  }
+
   // Habits → Goals (via goalId)
   const habitGoalRows = sqlite.prepare(
     `SELECT id, goal_id FROM habits WHERE goal_id IS NOT NULL AND archived_at IS NULL`
@@ -326,6 +338,18 @@ export function getStructuralEdges(): StructuralEdge[] {
       sourceType: 'habit', sourceId: row.id,
       targetType: 'project', targetId: row.project_id,
       label: 'belongs to',
+    });
+  }
+
+  // Projects → Goals (via goalId)
+  const projectGoalRows = sqlite.prepare(
+    `SELECT id, goal_id FROM projects WHERE goal_id IS NOT NULL AND archived_at IS NULL`
+  ).all() as { id: string; goal_id: string }[];
+  for (const row of projectGoalRows) {
+    edges.push({
+      sourceType: 'project', sourceId: row.id,
+      targetType: 'goal', targetId: row.goal_id,
+      label: 'advances',
     });
   }
 

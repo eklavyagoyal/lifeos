@@ -2,6 +2,7 @@ import { db } from '../db';
 import { ideas } from '../db/schema';
 import { eq, and, isNull, desc } from 'drizzle-orm';
 import { newId, now } from '@/lib/utils';
+import { removeSearchDocument, syncSearchDocument } from './search';
 
 // ============================================================
 // Ideas Service — Stage-driven idea pipeline
@@ -37,6 +38,13 @@ export function createIdea(input: CreateIdeaInput) {
     updatedAt: timestamp,
   }).run();
 
+  syncSearchDocument({
+    itemId: id,
+    itemType: 'idea',
+    title: input.title,
+    body: [input.summary, input.body].filter(Boolean).join(' '),
+  });
+
   return getIdea(id);
 }
 
@@ -56,7 +64,16 @@ export function updateIdea(input: UpdateIdeaInput) {
   if (input.theme !== undefined) updates.theme = input.theme;
 
   db.update(ideas).set(updates).where(eq(ideas.id, input.id)).run();
-  return getIdea(input.id);
+  const idea = getIdea(input.id);
+  if (idea && !idea.archivedAt) {
+    syncSearchDocument({
+      itemId: idea.id,
+      itemType: 'idea',
+      title: idea.title,
+      body: [idea.summary, idea.body].filter(Boolean).join(' '),
+    });
+  }
+  return idea;
 }
 
 /** Get all ideas (not archived) */
@@ -87,4 +104,5 @@ export function archiveIdea(id: string) {
     .set({ archivedAt: now(), updatedAt: now() })
     .where(eq(ideas.id, id))
     .run();
+  removeSearchDocument(id, 'idea');
 }

@@ -17,6 +17,9 @@ export type ItemType =
   | 'review'
   | 'inbox';
 
+/** All searchable domain object types */
+export type SearchableItemType = Exclude<ItemType, 'inbox'>;
+
 /** Global app mode */
 export type AppMode = 'quick' | 'deep';
 
@@ -28,6 +31,9 @@ export type TaskPriority = 'p1' | 'p2' | 'p3' | 'p4';
 
 /** Habit cadence */
 export type HabitCadence = 'daily' | 'weekly' | 'custom';
+
+/** Supported recurrence frequencies for scheduled tasks */
+export type RecurrenceFrequency = 'daily' | 'weekdays' | 'weekly' | 'biweekly' | 'monthly';
 
 /** Life domain categories — used for gamification and grouping */
 export type LifeDomain =
@@ -44,6 +50,12 @@ export type ProjectStatus = 'planning' | 'active' | 'paused' | 'completed' | 'ca
 
 /** Project health */
 export type ProjectHealth = 'on_track' | 'at_risk' | 'off_track';
+
+/** Project review cadence */
+export type ReviewCadence = 'weekly' | 'biweekly' | 'monthly';
+
+/** Milestone status */
+export type MilestoneStatus = 'planned' | 'active' | 'done' | 'cancelled';
 
 /** Goal time horizon */
 export type GoalTimeHorizon = 'quarterly' | 'yearly' | 'multi_year' | 'life';
@@ -84,8 +96,78 @@ export type RelationType =
   | 'summarizes'
   | 'affects';
 
+/** Resolved relation metadata for connection UIs */
+export interface ConnectionRelation {
+  id: string;
+  sourceType: ItemType;
+  sourceId: string;
+  targetType: ItemType;
+  targetId: string;
+  relationType: RelationType;
+}
+
+/** A resolved relation or structural connection shown on detail pages */
+export interface ConnectionItem {
+  relation?: ConnectionRelation;
+  type: ItemType;
+  id: string;
+  title: string;
+  subtitle?: string;
+  detailUrl: string;
+  direction: 'incoming' | 'outgoing' | 'structural';
+  relationLabel: string;
+}
+
+/** A suggested connection candidate derived from shared context */
+export interface ConnectionSuggestion {
+  type: ItemType;
+  id: string;
+  title: string;
+  subtitle?: string;
+  detailUrl: string;
+  sharedTags: string[];
+  reason: 'shared_tags' | 'mentions' | 'shared_tags_and_mentions';
+  snippet?: string;
+}
+
+/** A resolved search result for the command palette / search page */
+export interface SearchResultItem {
+  itemId: string;
+  itemType: SearchableItemType;
+  title: string;
+  snippet: string;
+  rank: number;
+  detailUrl: string;
+  subtitle?: string;
+  attachmentCount?: number;
+  attachmentNames?: string[];
+  matchOrigin?: 'item' | 'attachment' | 'item_and_attachment';
+}
+
 /** Review types */
 export type ReviewType = 'daily' | 'weekly' | 'monthly' | 'yearly';
+
+/** Scheduler job categories */
+export type SchedulerJobType =
+  | 'recurring_task'
+  | 'project_review'
+  | 'review_generation'
+  | 'stale_project_scan';
+
+/** Scheduler run outcomes */
+export type SchedulerRunStatus = 'running' | 'succeeded' | 'failed' | 'skipped';
+
+/** Supported import source types */
+export type ImportType = 'todoist_csv' | 'notion_export' | 'obsidian_vault' | 'day_one_json';
+
+/** Import run lifecycle states */
+export type ImportRunStatus = 'running' | 'completed' | 'failed';
+
+/** Attachment ingestion origin */
+export type AttachmentSourceType = 'upload' | 'import';
+
+/** Attachment text extraction lifecycle */
+export type AttachmentSearchStatus = 'pending' | 'indexed' | 'unsupported' | 'failed';
 
 /** Navigation section definition */
 export interface NavSection {
@@ -101,11 +183,25 @@ export interface NavItem {
 }
 
 /** Quick capture parsed result */
+export type CaptureSuggestedType = 'task' | 'note' | 'idea' | 'journal' | 'metric' | 'entity' | 'inbox';
+
 export interface CaptureParseResult {
-  suggestedType: ItemType;
+  rawText: string;
+  suggestedType: CaptureSuggestedType;
   title: string;
-  metadata: Record<string, unknown>;
+  body?: string;
+  tags: string[];
+  priority?: TaskPriority;
+  dueDate?: string;
+  scheduledDate?: string;
+  projectId?: string;
+  projectLabel?: string;
+  metricType?: MetricType;
+  metricValue?: number;
+  entityType?: EntityType;
+  directCreateSupported: boolean;
   confidence: number;
+  warnings: string[];
 }
 
 // ============================================================
@@ -121,6 +217,8 @@ export interface GraphNode {
   status?: string;
   date?: string;
   detailUrl: string;
+  tagIds?: string[];
+  attachmentCount?: number;
   x: number;
   y: number;
 }
@@ -131,7 +229,7 @@ export interface GraphEdge {
   sourceId: string;
   targetId: string;
   label: string;
-  edgeType: 'relation' | 'structural' | 'tag';
+  edgeType: 'relation' | 'structural' | 'tag' | 'attachment';
 }
 
 /** Filter options for the graph */

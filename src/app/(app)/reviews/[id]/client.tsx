@@ -4,13 +4,17 @@ import { useState, useTransition, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { DetailPageShell } from '@/components/detail/detail-page-shell';
 import { StatusBadge } from '@/components/detail/status-badge';
+import { TagsPills } from '@/components/detail/tags-pills';
+import { RelationsPanel } from '@/components/detail/relations-panel';
 import {
   updateReviewBodyAction,
   publishReviewAction,
   deleteReviewAction,
   regenerateReviewAction,
+  extractReviewInsightAction,
 } from '@/app/actions';
 import { formatISODate } from '@/lib/utils';
+import type { ConnectionItem, ConnectionSuggestion } from '@/lib/types';
 import {
   Check,
   RefreshCw,
@@ -38,11 +42,36 @@ interface Review {
   updatedAt: number;
 }
 
-interface ReviewDetailClientProps {
-  review: Review;
+type RelatedItem = ConnectionItem;
+type SuggestedItem = ConnectionSuggestion;
+
+interface Tag {
+  id: string;
+  name: string;
+  color: string | null;
+  itemTagId: string;
 }
 
-export function ReviewDetailClient({ review }: ReviewDetailClientProps) {
+interface ReviewDetailClientProps {
+  review: Review;
+  relatedItems: RelatedItem[];
+  structuralItems: RelatedItem[];
+  suggestedItems: SuggestedItem[];
+  tags: Tag[];
+}
+
+function formatReviewTitle(reviewType: string): string {
+  if (!reviewType) return 'Review';
+  return `${reviewType[0].toUpperCase()}${reviewType.slice(1)} Review`;
+}
+
+export function ReviewDetailClient({
+  review,
+  relatedItems,
+  structuralItems,
+  suggestedItems,
+  tags,
+}: ReviewDetailClientProps) {
   const router = useRouter();
   const [body, setBody] = useState(review.body || '');
   const [isEditing, setIsEditing] = useState(false);
@@ -61,19 +90,21 @@ export function ReviewDetailClient({ review }: ReviewDetailClientProps) {
       await updateReviewBodyAction(review.id, body);
       setIsEditing(false);
       setActionLabel('');
+      router.refresh();
     });
-  }, [body, review.body, review.id]);
+  }, [body, review.body, review.id, router]);
 
   const handlePublish = () => {
     startTransition(async () => {
       setActionLabel('Publishing…');
       await publishReviewAction(review.id);
       setActionLabel('');
+      router.refresh();
     });
   };
 
   const handleRegenerate = () => {
-    if (!confirm('Regenerate will overwrite the current body with fresh data. Continue?')) return;
+    if (!confirm('Regenerate refreshes the generated sections while preserving your marked personal sections. Continue?')) return;
     startTransition(async () => {
       setActionLabel('Regenerating…');
       const result = await regenerateReviewAction(review.id);
@@ -81,6 +112,7 @@ export function ReviewDetailClient({ review }: ReviewDetailClientProps) {
         setBody(result.review.body || '');
       }
       setActionLabel('');
+      router.refresh();
     });
   };
 
@@ -89,13 +121,15 @@ export function ReviewDetailClient({ review }: ReviewDetailClientProps) {
     router.push('/reviews');
   };
 
-  const periodLabel = `${formatISODate(review.periodStart)} → ${review.periodEnd ? formatISODate(review.periodEnd) : ''}`;
+  const periodLabel = review.periodEnd && review.periodEnd !== review.periodStart
+    ? `${formatISODate(review.periodStart)} → ${formatISODate(review.periodEnd)}`
+    : formatISODate(review.periodStart);
 
   return (
     <DetailPageShell
       backHref="/reviews"
       backLabel="Reviews"
-      title="Weekly Review"
+      title={formatReviewTitle(review.reviewType)}
       subtitle={periodLabel}
       badge={
         review.isPublished ? (
@@ -139,14 +173,19 @@ export function ReviewDetailClient({ review }: ReviewDetailClientProps) {
       {snapshot && <StatsGrid snapshot={snapshot} />}
 
       {/* Insights cards */}
-      {snapshot && <InsightsCards snapshot={snapshot} />}
+      {snapshot && <InsightsCards reviewId={review.id} snapshot={snapshot} />}
 
       {/* Body editor */}
       <div className="card">
         <div className="flex items-center justify-between mb-3">
-          <h3 className="text-2xs font-medium uppercase tracking-wider text-text-muted">
-            Review Body
-          </h3>
+          <div>
+            <h3 className="text-2xs font-medium uppercase tracking-wider text-text-muted">
+              Review Body
+            </h3>
+            <p className="mt-1 text-2xs text-text-muted">
+              The personal notes, lessons, and commitments sections are preserved when you regenerate.
+            </p>
+          </div>
           <button
             onClick={() => {
               if (isEditing) {
@@ -182,6 +221,21 @@ export function ReviewDetailClient({ review }: ReviewDetailClientProps) {
           </div>
         )}
       </div>
+
+      <div className="card">
+        <h3 className="mb-2 text-2xs font-medium uppercase tracking-wider text-text-muted">
+          Tags
+        </h3>
+        <TagsPills itemType="review" itemId={review.id} tags={tags} />
+      </div>
+
+      <RelationsPanel
+        items={relatedItems}
+        structuralItems={structuralItems}
+        suggestions={suggestedItems}
+        currentItemType="review"
+        currentItemId={review.id}
+      />
     </DetailPageShell>
   );
 }
@@ -191,13 +245,13 @@ export function ReviewDetailClient({ review }: ReviewDetailClientProps) {
 // ============================================================
 
 interface SnapshotData {
-  tasks?: { completed?: number; total?: number; completionRate?: number };
-  habits?: { totalCompletions?: number; possibleCompletions?: number; overallRate?: number; bestStreakHabit?: string; bestStreakValue?: number };
-  metrics?: { avgMood?: number | null; avgEnergy?: number | null; avgSleep?: number | null; totalWorkoutMinutes?: number };
-  journal?: { entryCount?: number; avgWordCount?: number; moodTrend?: string };
-  projects?: { active?: number; completedTasks?: number };
-  goals?: { active?: number; avgProgress?: number };
-  ideas?: { captured?: number };
+  tasks?: { completed?: number; created?: number; overdue?: number };
+  habits?: { totalCompletions?: number; possibleCompletions?: number; completionRate?: number };
+  metrics?: { moodAvg?: number | null; energyAvg?: number | null; sleepAvg?: number | null; workoutMinutes?: number };
+  journal?: { entryCount?: number; totalWords?: number };
+  projects?: { activeCount?: number };
+  goals?: { activeCount?: number };
+  ideas?: { capturedCount?: number };
   wins?: string[];
   blockers?: string[];
   focusAreas?: string[];
@@ -219,28 +273,28 @@ function StatsGrid({ snapshot }: { snapshot: SnapshotData }) {
     stats.push({
       icon: <ListChecks className="h-4 w-4 text-blue-500" />,
       label: 'Tasks Done',
-      value: `${snapshot.tasks.completed ?? 0}/${snapshot.tasks.total ?? 0}`,
+      value: String(snapshot.tasks.completed ?? 0),
     });
   }
   if (snapshot.habits) {
     stats.push({
       icon: <Dumbbell className="h-4 w-4 text-green-500" />,
-      label: 'Habit Checks',
-      value: `${snapshot.habits.totalCompletions ?? 0}/${snapshot.habits.possibleCompletions ?? 0}`,
+      label: 'Habit Consistency',
+      value: `${snapshot.habits.completionRate ?? 0}%`,
     });
   }
-  if (snapshot.metrics?.avgMood != null) {
+  if (snapshot.metrics?.moodAvg != null) {
     stats.push({
       icon: <Sparkles className="h-4 w-4 text-yellow-500" />,
       label: 'Avg Mood',
-      value: snapshot.metrics.avgMood.toFixed(1),
+      value: snapshot.metrics.moodAvg.toFixed(1),
     });
   }
-  if (snapshot.metrics?.avgSleep != null) {
+  if (snapshot.metrics?.sleepAvg != null) {
     stats.push({
       icon: <BarChart3 className="h-4 w-4 text-indigo-500" />,
       label: 'Avg Sleep',
-      value: `${snapshot.metrics.avgSleep.toFixed(1)}h`,
+      value: `${snapshot.metrics.sleepAvg.toFixed(1)}h`,
     });
   }
   if (snapshot.journal) {
@@ -254,7 +308,7 @@ function StatsGrid({ snapshot }: { snapshot: SnapshotData }) {
     stats.push({
       icon: <Target className="h-4 w-4 text-orange-500" />,
       label: 'Ideas Captured',
-      value: String(snapshot.ideas.captured ?? 0),
+      value: String(snapshot.ideas.capturedCount ?? 0),
     });
   }
 
@@ -263,7 +317,7 @@ function StatsGrid({ snapshot }: { snapshot: SnapshotData }) {
   return (
     <div className="card">
       <h3 className="text-2xs font-medium uppercase tracking-wider text-text-muted mb-3">
-        Week at a Glance
+        Review Snapshot
       </h3>
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
         {stats.map((s, i) => (
@@ -286,12 +340,27 @@ function StatsGrid({ snapshot }: { snapshot: SnapshotData }) {
 // Insights Cards (wins, blockers, focus areas)
 // ============================================================
 
-function InsightsCards({ snapshot }: { snapshot: SnapshotData }) {
+function InsightsCards({
+  reviewId,
+  snapshot,
+}: {
+  reviewId: string;
+  snapshot: SnapshotData;
+}) {
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
   const hasWins = snapshot.wins && snapshot.wins.length > 0;
   const hasBlockers = snapshot.blockers && snapshot.blockers.length > 0;
   const hasFocus = snapshot.focusAreas && snapshot.focusAreas.length > 0;
 
   if (!hasWins && !hasBlockers && !hasFocus) return null;
+
+  const extractInsight = (insight: string, targetType: 'task' | 'goal') => {
+    startTransition(async () => {
+      await extractReviewInsightAction(reviewId, targetType, insight);
+      router.refresh();
+    });
+  };
 
   return (
     <div className="grid gap-4 sm:grid-cols-3">
@@ -303,7 +372,14 @@ function InsightsCards({ snapshot }: { snapshot: SnapshotData }) {
           </div>
           <ul className="space-y-1">
             {snapshot.wins!.map((w, i) => (
-              <li key={i} className="text-xs text-text-secondary">• {w}</li>
+              <li key={i} className="flex items-start justify-between gap-3 text-xs text-text-secondary">
+                <span className="flex-1">• {w}</span>
+                <InsightButtons
+                  disabled={isPending}
+                  onTask={() => extractInsight(w, 'task')}
+                  onGoal={() => extractInsight(w, 'goal')}
+                />
+              </li>
             ))}
           </ul>
         </div>
@@ -316,7 +392,14 @@ function InsightsCards({ snapshot }: { snapshot: SnapshotData }) {
           </div>
           <ul className="space-y-1">
             {snapshot.blockers!.map((b, i) => (
-              <li key={i} className="text-xs text-text-secondary">• {b}</li>
+              <li key={i} className="flex items-start justify-between gap-3 text-xs text-text-secondary">
+                <span className="flex-1">• {b}</span>
+                <InsightButtons
+                  disabled={isPending}
+                  onTask={() => extractInsight(b, 'task')}
+                  onGoal={() => extractInsight(b, 'goal')}
+                />
+              </li>
             ))}
           </ul>
         </div>
@@ -329,11 +412,47 @@ function InsightsCards({ snapshot }: { snapshot: SnapshotData }) {
           </div>
           <ul className="space-y-1">
             {snapshot.focusAreas!.map((f, i) => (
-              <li key={i} className="text-xs text-text-secondary">• {f}</li>
+              <li key={i} className="flex items-start justify-between gap-3 text-xs text-text-secondary">
+                <span className="flex-1">• {f}</span>
+                <InsightButtons
+                  disabled={isPending}
+                  onTask={() => extractInsight(f, 'task')}
+                  onGoal={() => extractInsight(f, 'goal')}
+                />
+              </li>
             ))}
           </ul>
         </div>
       )}
+    </div>
+  );
+}
+
+function InsightButtons({
+  disabled,
+  onTask,
+  onGoal,
+}: {
+  disabled: boolean;
+  onTask: () => void;
+  onGoal: () => void;
+}) {
+  return (
+    <div className="flex shrink-0 items-center gap-1">
+      <button
+        onClick={onTask}
+        disabled={disabled}
+        className="rounded-md bg-surface-2 px-2 py-1 text-2xs font-medium text-text-primary transition-colors hover:bg-surface-3 disabled:opacity-50"
+      >
+        Task
+      </button>
+      <button
+        onClick={onGoal}
+        disabled={disabled}
+        className="rounded-md bg-surface-2 px-2 py-1 text-2xs font-medium text-text-primary transition-colors hover:bg-surface-3 disabled:opacity-50"
+      >
+        Goal
+      </button>
     </div>
   );
 }

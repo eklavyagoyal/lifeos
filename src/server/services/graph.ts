@@ -7,15 +7,15 @@
  */
 
 import { db, sqlite } from '../db';
-import { relations as relationsTable, tags, itemTags } from '../db/schema';
+import { itemTags, relations as relationsTable, tags } from '../db/schema';
 import { desc } from 'drizzle-orm';
 import type { ItemType, GraphNode, GraphEdge, GraphFilters } from '@/lib/types';
+import { getAttachmentSummariesForItems, getSharedAttachmentEdges } from './attachment-queries';
 import {
   resolveItemsBatch, getStructuralEdges, getTagSharedEdges,
   getDetailUrl, TYPE_COLORS,
   type ResolvedItem,
 } from './graph-helpers';
-import { newId } from '@/lib/utils';
 
 // ----------------------------------------------------------
 // Default filter config
@@ -77,6 +77,12 @@ export function getFullGraph(filters?: Partial<GraphFilters>): {
     }
   }
 
+  // 1d. Shared attachment edges
+  const attachmentEdges = getSharedAttachmentEdges();
+  for (const edge of attachmentEdges) {
+    rawEdges.push({ ...edge, edgeType: 'attachment' });
+  }
+
   // 2. Filter edges to only include allowed types
   const filteredEdges = rawEdges.filter(
     e => allowedTypes.has(e.sourceType) && allowedTypes.has(e.targetType)
@@ -119,12 +125,21 @@ export function getFullGraph(filters?: Partial<GraphFilters>): {
       edgeType: edge.edgeType,
     });
   }
-
-  // 7. Build graph nodes with layout positions
-  const resolvedNodes = [...resolved.values()].filter(n =>
-    allowedNodeKeys.has(`${n.type}:${n.id}`)
+  graphEdges.sort((a, b) =>
+    `${a.sourceId}:${a.targetId}:${a.edgeType}:${a.label}`.localeCompare(
+      `${b.sourceId}:${b.targetId}:${b.edgeType}:${b.label}`
+    )
   );
 
+  // 7. Build graph nodes with layout positions
+  const resolvedNodes = [...resolved.values()]
+    .filter(n => allowedNodeKeys.has(`${n.type}:${n.id}`))
+    .sort((a, b) => `${a.type}:${a.id}`.localeCompare(`${b.type}:${b.id}`));
+
+  const nodeTagIds = getNodeTagIds(resolvedNodes.map((node) => ({ type: node.type, id: node.id })));
+  const attachmentSummaries = getAttachmentSummariesForItems(
+    resolvedNodes.map((node) => ({ type: node.type, id: node.id }))
+  );
   const positions = computeLayout(resolvedNodes, graphEdges);
 
   const graphNodes: GraphNode[] = resolvedNodes.map((item) => {
@@ -138,6 +153,8 @@ export function getFullGraph(filters?: Partial<GraphFilters>): {
       status: item.status,
       date: item.date,
       detailUrl: item.detailUrl,
+      tagIds: nodeTagIds.get(key) ?? [],
+      attachmentCount: attachmentSummaries.counts.get(key) ?? 0,
       x: pos.x,
       y: pos.y,
     };
@@ -191,6 +208,33 @@ export function getGraphTags() {
   return db.select().from(tags).orderBy(tags.name).all();
 }
 
+function getNodeTagIds(items: Array<{ type: ItemType; id: string }>) {
+  const itemKeys = items.map((item) => `${item.type}:${item.id}`);
+  const result = new Map<string, string[]>();
+
+  if (itemKeys.length === 0) return result;
+
+  const placeholders = itemKeys.map(() => '?').join(', ');
+  const rows = sqlite.prepare(`
+    SELECT item_type, item_id, tag_id
+    FROM item_tags
+    WHERE (item_type || ':' || item_id) IN (${placeholders})
+  `).all(...itemKeys) as Array<{
+    item_type: string;
+    item_id: string;
+    tag_id: string;
+  }>;
+
+  for (const row of rows) {
+    const key = `${row.item_type}:${row.item_id}`;
+    const tagIds = result.get(key) ?? [];
+    tagIds.push(row.tag_id);
+    result.set(key, tagIds);
+  }
+
+  return result;
+}
+
 // ----------------------------------------------------------
 // Simple force-directed layout
 // Computes x,y positions for nodes in [0, 1000] x [0, 1000] space
@@ -221,9 +265,11 @@ function computeLayout(
     const radius = 300;
     const cx = 500 + radius * Math.cos(angle);
     const cy = 500 + radius * Math.sin(angle);
+    const jitterX = (seededUnit(`${key}:x`) - 0.5) * 150;
+    const jitterY = (seededUnit(`${key}:y`) - 0.5) * 150;
     positions.set(key, {
-      x: cx + (Math.random() - 0.5) * 150,
-      y: cy + (Math.random() - 0.5) * 150,
+      x: cx + jitterX,
+      y: cy + jitterY,
     });
   }
 
@@ -303,4 +349,14 @@ function computeLayout(
   }
 
   return positions;
+}
+
+function seededUnit(seed: string): number {
+  let hash = 2166136261;
+  for (let i = 0; i < seed.length; i++) {
+    hash ^= seed.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+
+  return ((hash >>> 0) % 10000) / 10000;
 }
