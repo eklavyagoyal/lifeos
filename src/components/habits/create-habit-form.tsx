@@ -2,8 +2,9 @@
 
 import { useState } from 'react';
 import { createHabitAction } from '@/app/actions';
-import { Plus } from 'lucide-react';
+import { Repeat } from 'lucide-react';
 import { cn } from '@/lib/cn';
+import { SecondaryLaunchButton } from '@/components/experience/secondary-create-dialog';
 
 const DOMAINS = [
   { value: 'health', label: 'Health' },
@@ -28,19 +29,27 @@ export function CreateHabitForm() {
 
   if (!isOpen) {
     return (
-      <button
+      <SecondaryLaunchButton
+        icon={Repeat}
+        label="Start a new rhythm"
+        detail="Add a habit with a domain and difficulty so it fits the rest of the system cleanly."
         onClick={() => setIsOpen(true)}
-        className="flex w-full items-center gap-2 rounded-lg border border-dashed border-surface-4 px-4 py-3 text-sm text-text-muted hover:border-brand-300 hover:text-brand-500 transition-colors"
-      >
-        <Plus size={16} />
-        Add new habit
-      </button>
+        variant="panel"
+      />
     );
   }
 
   return (
-    <form action={handleSubmit} className="card space-y-3">
-      <h3 className="text-sm font-semibold text-text-primary">New Habit</h3>
+    <form action={handleSubmit} className="secondary-inline-form space-y-4">
+      <div>
+        <div className="section-kicker">Habit Capture</div>
+        <h3 className="mt-2 font-display text-[1.65rem] leading-none tracking-[-0.05em] text-text-primary">
+          Add a habit
+        </h3>
+        <p className="mt-2 text-sm leading-6 text-text-secondary">
+          Keep the setup lightweight now. You can refine cadence, reminders, and relationships from the detail page after it exists.
+        </p>
+      </div>
 
       <input
         autoFocus
@@ -48,13 +57,13 @@ export function CreateHabitForm() {
         type="text"
         required
         placeholder="Habit name (e.g., Meditate)"
-        className="w-full rounded-md border border-surface-3 bg-surface-0 px-3 py-2 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
+        className="secondary-input"
       />
 
-      <div className="flex gap-3">
+      <div className="grid gap-3 sm:grid-cols-2">
         <select
           name="domain"
-          className="flex-1 rounded-md border border-surface-3 bg-surface-0 px-3 py-2 text-sm outline-none focus:border-brand-400"
+          className="secondary-select"
         >
           <option value="">Domain (optional)</option>
           {DOMAINS.map(d => (
@@ -64,10 +73,11 @@ export function CreateHabitForm() {
 
         <select
           name="difficulty"
-          className="flex-1 rounded-md border border-surface-3 bg-surface-0 px-3 py-2 text-sm outline-none focus:border-brand-400"
+          defaultValue="medium"
+          className="secondary-select"
         >
           <option value="easy">Easy</option>
-          <option value="medium" selected>Medium</option>
+          <option value="medium">Medium</option>
           <option value="hard">Hard</option>
         </select>
       </div>
@@ -76,7 +86,7 @@ export function CreateHabitForm() {
         <button
           type="button"
           onClick={() => setIsOpen(false)}
-          className="rounded-md px-3 py-1.5 text-sm text-text-secondary hover:bg-surface-2"
+          className="secondary-toolbar-button"
         >
           Cancel
         </button>
@@ -84,8 +94,8 @@ export function CreateHabitForm() {
           type="submit"
           disabled={isSubmitting}
           className={cn(
-            'rounded-md bg-brand-600 px-4 py-1.5 text-sm font-medium text-white',
-            'hover:bg-brand-700 disabled:opacity-50 transition-colors'
+            'secondary-toolbar-button bg-[linear-gradient(135deg,rgba(201,143,88,0.96)_0%,rgba(174,93,44,0.92)_100%)] text-white',
+            'border-[rgba(174,93,44,0.18)] hover:text-white disabled:opacity-50'
           )}
         >
           {isSubmitting ? 'Creating...' : 'Create Habit'}

@@ -1,7 +1,7 @@
 import { getFullGraph, getGraphTags } from '@/server/services/graph';
 import { GraphClient } from './client';
 
-export const metadata = { title: 'Graph Explorer — lifeOS' };
+export const metadata = { title: 'Memory Atlas — lifeOS' };
 export const dynamic = 'force-dynamic';
 
 export default function GraphPage() {
@@ -9,7 +9,7 @@ export default function GraphPage() {
   const allTags = getGraphTags();
 
   return (
-    <div className="animate-fade-in -mx-4 sm:-mx-6 lg:-mx-8">
+    <div className="-mx-4 pb-4 sm:-mx-6 lg:-mx-8">
       <GraphClient
         initialNodes={graph.nodes}
         initialEdges={graph.edges}

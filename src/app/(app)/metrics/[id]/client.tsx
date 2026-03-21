@@ -90,6 +90,7 @@ export function MetricDetailClient({
 
   const handleUpdate = async (field: string, value: unknown) => {
     await updateMetricAction(metric.id, { [field]: value });
+    router.refresh();
   };
 
   const handleDelete = async () => {
@@ -107,6 +108,7 @@ export function MetricDetailClient({
       title={`${typeIcon} ${typeLabel}`}
       subtitle={formatISODate(metric.loggedDate)}
       onArchive={handleDelete}
+      destructiveLabel="Delete metric"
       badge={
         <span className="rounded-full bg-surface-2 px-2.5 py-0.5 text-xs font-medium text-text-secondary">
           {typeLabel}

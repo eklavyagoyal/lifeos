@@ -1,7 +1,7 @@
 import { cn } from '@/lib/cn';
 
 interface ProgressBarProps {
-  value: number; // 0–100
+  value: number;
   size?: 'sm' | 'md';
   showLabel?: boolean;
   className?: string;
@@ -17,31 +17,31 @@ export function ProgressBar({
 
   const barColor =
     clamped >= 80
-      ? 'bg-green-500'
+      ? 'from-[rgb(96,127,97)] to-[rgb(142,173,120)]'
       : clamped >= 50
-        ? 'bg-blue-500'
+        ? 'from-[rgb(90,131,188)] to-[rgb(132,170,214)]'
         : clamped >= 20
-          ? 'bg-amber-500'
-          : 'bg-surface-4';
+          ? 'from-[rgb(195,150,72)] to-[rgb(228,190,116)]'
+          : 'from-[rgb(187,129,98)] to-[rgb(214,169,137)]';
 
   return (
-    <div className={cn('flex items-center gap-2', className)}>
+    <div className={cn('space-y-2', className)}>
       <div
         className={cn(
-          'flex-1 overflow-hidden rounded-full bg-surface-2',
-          size === 'sm' ? 'h-1.5' : 'h-2.5'
+          'overflow-hidden rounded-full border border-line-soft bg-[linear-gradient(180deg,rgba(255,251,245,0.88),rgba(240,229,214,0.72))]',
+          size === 'sm' ? 'h-2' : 'h-3'
         )}
       >
         <div
-          className={cn('h-full rounded-full transition-all duration-300', barColor)}
+          className={cn('h-full rounded-full bg-gradient-to-r transition-all duration-300 ease-luxury', barColor)}
           style={{ width: `${clamped}%` }}
         />
       </div>
-      {showLabel && (
-        <span className="text-2xs font-medium text-text-tertiary tabular-nums">
+      {showLabel ? (
+        <div className="text-right text-2xs font-medium tabular-nums text-text-secondary">
           {clamped}%
-        </span>
-      )}
+        </div>
+      ) : null}
     </div>
   );
 }

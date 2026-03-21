@@ -1,191 +1,302 @@
 'use client';
 
+import { useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
+import { ChevronRight, Compass, LogOut, Moon, Sparkles, X, Zap } from 'lucide-react';
 import { cn } from '@/lib/cn';
-import { useMode } from '@/stores/mode-store';
 import { logoutAction } from '@/app/actions';
+import { useMode } from '@/stores/mode-store';
 import {
-  Sun,
-  Inbox,
-  CheckSquare,
-  Repeat,
-  BookOpen,
-  StickyNote,
-  Lightbulb,
-  FolderKanban,
-  Target,
-  Heart,
-  DollarSign,
-  GraduationCap,
-  Users,
-  BarChart3,
-  Network,
-  ClipboardList,
-  Clock,
-  Search,
-  Upload,
-  Settings,
-  Zap,
-  Moon,
-  LogOut,
-  TrendingUp,
-} from 'lucide-react';
+  type ShellNavItem,
+  isShellNavItemActive,
+  shellNavigation,
+} from '@/components/layout/shell-config';
 
-interface NavItem {
-  label: string;
-  href: string;
-  icon: React.ReactNode;
-  badge?: number;
+interface SidebarProps {
+  activeItem: ShellNavItem;
+  dayPhase: string;
+  dateLabel: string;
+  mobileOpen: boolean;
+  onClose: () => void;
 }
 
-interface NavGroup {
-  label?: string;
-  items: NavItem[];
-}
-
-const navigation: NavGroup[] = [
-  {
-    items: [
-      { label: 'Today', href: '/today', icon: <Sun size={18} /> },
-      { label: 'Inbox', href: '/inbox', icon: <Inbox size={18} /> },
-    ],
-  },
-  {
-    label: 'Track',
-    items: [
-      { label: 'Tasks', href: '/tasks', icon: <CheckSquare size={18} /> },
-      { label: 'Habits', href: '/habits', icon: <Repeat size={18} /> },
-      { label: 'Journal', href: '/journal', icon: <BookOpen size={18} /> },
-      { label: 'Notes', href: '/notes', icon: <StickyNote size={18} /> },
-      { label: 'Ideas', href: '/ideas', icon: <Lightbulb size={18} /> },
-    ],
-  },
-  {
-    label: 'Plan',
-    items: [
-      { label: 'Projects', href: '/projects', icon: <FolderKanban size={18} /> },
-      { label: 'Goals', href: '/goals', icon: <Target size={18} /> },
-    ],
-  },
-  {
-    label: 'Life',
-    items: [
-      { label: 'Health', href: '/health', icon: <Heart size={18} /> },
-      { label: 'Finance', href: '/finance', icon: <DollarSign size={18} /> },
-      { label: 'Learning', href: '/learning', icon: <GraduationCap size={18} /> },
-      { label: 'People', href: '/people', icon: <Users size={18} /> },
-    ],
-  },
-  {
-    label: 'Analyze',
-    items: [
-      { label: 'Insights', href: '/insights', icon: <TrendingUp size={18} /> },
-      { label: 'Metrics', href: '/metrics', icon: <BarChart3 size={18} /> },
-      { label: 'Graph', href: '/graph', icon: <Network size={18} /> },
-      { label: 'Reviews', href: '/reviews', icon: <ClipboardList size={18} /> },
-      { label: 'Timeline', href: '/timeline', icon: <Clock size={18} /> },
-    ],
-  },
-  {
-    items: [
-      { label: 'Search', href: '/search', icon: <Search size={18} /> },
-      { label: 'Imports', href: '/imports', icon: <Upload size={18} /> },
-      { label: 'Settings', href: '/settings', icon: <Settings size={18} /> },
-    ],
-  },
-];
-
-export function Sidebar() {
+export function Sidebar({
+  activeItem,
+  dayPhase,
+  dateLabel,
+  mobileOpen,
+  onClose,
+}: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
-  const { mode, toggleMode, isQuick } = useMode();
+  const { toggleMode, isQuick } = useMode();
+  const ActiveIcon = activeItem.icon;
+  const containerRef = useRef<HTMLElement>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (!mobileOpen) return;
+
+    window.requestAnimationFrame(() => {
+      closeButtonRef.current?.focus();
+    });
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Tab') return;
+
+      const container = containerRef.current;
+      if (!container) return;
+
+      const focusable = container.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      );
+
+      if (focusable.length === 0) return;
+
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      const activeElement = document.activeElement;
+
+      if (event.shiftKey && activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [mobileOpen]);
 
   return (
-    <aside className="fixed left-0 top-0 z-30 flex h-screen w-sidebar flex-col border-r border-surface-3 bg-surface-0">
-      {/* Logo / Header */}
-      <div className="flex h-14 items-center justify-between px-4">
-        <Link href="/today" className="flex items-center gap-2">
-          <div className="flex h-7 w-7 items-center justify-center rounded-md bg-brand-600 text-white text-sm font-bold">
-            L
+    <aside
+      id="app-shell-sidebar"
+      ref={containerRef}
+      role={mobileOpen ? 'dialog' : undefined}
+      aria-modal={mobileOpen || undefined}
+      aria-label={mobileOpen ? 'Primary navigation' : undefined}
+      className={cn(
+        'shell-rail fixed inset-y-0 left-0 z-40 flex h-screen w-[var(--sidebar-width)] flex-col p-3 transition-transform duration-300 ease-luxury lg:translate-x-0 lg:p-4',
+        mobileOpen ? 'translate-x-0' : '-translate-x-[calc(var(--sidebar-width)+1.5rem)]'
+      )}
+    >
+      <div className="flex h-full min-h-0 flex-col gap-3">
+        <div className="flex items-center justify-between px-1 lg:hidden">
+          <div>
+            <div className="section-kicker text-[0.63rem]">Navigation</div>
+            <p className="mt-1 text-xs text-text-secondary">Move through your observatory.</p>
           </div>
-          <span className="text-sm font-semibold text-text-primary">lifeOS</span>
-        </Link>
-      </div>
+          <button
+            ref={closeButtonRef}
+            type="button"
+            onClick={onClose}
+            className="flex h-10 w-10 items-center justify-center rounded-2xl border border-line-soft bg-surface-0/76 text-text-primary shadow-soft backdrop-blur-xl transition-all duration-300 ease-luxury hover:-translate-y-0.5 hover:shadow-panel"
+            aria-label="Close navigation"
+          >
+            <X size={18} />
+          </button>
+        </div>
 
-      {/* Navigation */}
-      <nav className="flex-1 overflow-y-auto px-3 py-2">
-        {navigation.map((group, gi) => (
-          <div key={gi} className={cn(gi > 0 && 'mt-4')}>
-            {group.label && (
-              <div className="mb-1 px-3 text-2xs font-semibold uppercase tracking-wider text-text-muted">
-                {group.label}
+        <Link href="/today" className="shell-brand-card surface-obsidian overflow-hidden px-4 py-4" onClick={onClose}>
+          <div className="flex items-start gap-3">
+            <div className="mt-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-[1.35rem] border border-white/10 bg-white/10 text-white shadow-soft">
+              <Compass size={18} />
+            </div>
+            <div className="min-w-0">
+              <div className="text-2xs uppercase tracking-[0.24em] text-text-inverse/60">
+                Personal Observatory
               </div>
-            )}
-            {group.items.map((item) => {
-              const isActive =
-                pathname === item.href || pathname.startsWith(item.href + '/');
+              <div className="mt-1 font-display text-[1.7rem] leading-none tracking-[-0.05em] text-text-inverse">
+                lifeOS
+              </div>
+              <p className="mt-2 text-xs leading-5 text-text-inverse/70">
+                A room for rhythm, reflection, memory, and deliberate action.
+              </p>
+            </div>
+          </div>
+        </Link>
+
+        <div className="surface-glass px-4 py-4">
+          <div className="section-kicker text-[0.63rem]">Current Lens</div>
+          <div className="mt-3 flex items-start gap-3">
+            <div
+              className="nav-icon-slot mt-0.5 h-11 w-11 shrink-0"
+              style={{
+                background: `linear-gradient(135deg, rgb(${activeItem.accent} / 0.2) 0%, rgba(255, 248, 240, 0.94) 100%)`,
+                color: `rgb(${activeItem.accent})`,
+              }}
+            >
+              <ActiveIcon size={18} />
+            </div>
+            <div className="min-w-0">
+              <div className="text-sm font-medium text-text-primary">{activeItem.label}</div>
+              <div className="mt-0.5 text-xs uppercase tracking-[0.2em] text-text-tertiary">
+                {activeItem.scene}
+              </div>
+              <p className="mt-2 text-xs leading-5 text-text-secondary">
+                {activeItem.description}
+              </p>
+            </div>
+          </div>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <span className="shell-meta-pill">{dayPhase}</span>
+            <span className="shell-meta-pill">{dateLabel}</span>
+            <span className="shell-meta-pill">
+              {isQuick ? <Zap size={12} /> : <Moon size={12} />}
+              {isQuick ? 'Quick Mode' : 'Deep Mode'}
+            </span>
+          </div>
+        </div>
+
+        <nav className="min-h-0 flex-1 overflow-y-auto pr-1">
+          <div className="space-y-3">
+            {shellNavigation.map((group) => {
+              const groupActive = group.items.some((item) => isShellNavItemActive(pathname, item.href));
+              const groupLeadItem =
+                group.items.find((item) => isShellNavItemActive(pathname, item.href)) ?? group.items[0];
+
               return (
-                <Link
-                  key={item.href}
-                  href={item.href}
+                <section
+                  key={group.label}
                   className={cn(
-                    'nav-item',
-                    isActive && 'nav-item-active'
+                    'shell-nav-cluster px-2 py-2',
+                    groupActive && 'shadow-soft'
                   )}
+                  style={
+                    groupActive
+                      ? {
+                          borderColor: `rgb(${groupLeadItem.accent} / 0.14)`,
+                          background:
+                            `linear-gradient(180deg, rgb(${groupLeadItem.highlight} / 0.82) 0%, rgba(247, 237, 223, 0.6) 100%)`,
+                        }
+                      : undefined
+                  }
                 >
-                  {item.icon}
-                  <span>{item.label}</span>
-                  {item.badge !== undefined && item.badge > 0 && (
-                    <span className="ml-auto badge bg-brand-100 text-brand-700">
-                      {item.badge}
-                    </span>
+                  {group.label && (
+                    <div className="mb-2 px-2">
+                      <div className="flex items-center gap-2">
+                        <span
+                          className="h-1.5 w-1.5 rounded-full"
+                          style={{ backgroundColor: `rgb(${groupLeadItem.accent})` }}
+                        />
+                        <div className="text-2xs font-semibold uppercase tracking-[0.22em] text-text-tertiary">
+                          {group.label}
+                        </div>
+                      </div>
+                      {group.description && (
+                        <p className="mt-1 text-[11px] leading-4 text-text-muted">
+                          {group.description}
+                        </p>
+                      )}
+                    </div>
                   )}
-                </Link>
+
+                  <div className="space-y-1">
+                    {group.items.map((item) => {
+                      const isActive = isShellNavItemActive(pathname, item.href);
+                      const Icon = item.icon;
+
+                      return (
+                        <Link
+                          key={item.href}
+                          href={item.href}
+                          className={cn('nav-item group overflow-hidden pr-2', isActive && 'nav-item-active')}
+                          onClick={onClose}
+                          aria-current={isActive ? 'page' : undefined}
+                        >
+                          <span
+                            className={cn(
+                              'nav-icon-slot',
+                              isActive && 'border-[rgba(174,93,44,0.14)]'
+                            )}
+                            style={
+                              isActive
+                                ? {
+                                    background: `linear-gradient(135deg, rgb(${item.accent} / 0.2) 0%, rgba(255, 248, 240, 0.94) 100%)`,
+                                    color: `rgb(${item.accent})`,
+                                  }
+                                : undefined
+                            }
+                          >
+                            <Icon size={18} />
+                          </span>
+
+                          <span className="min-w-0 flex-1">
+                            <span className="block text-sm font-medium text-current">
+                              {item.label}
+                            </span>
+                            <span className="mt-0.5 block text-[11px] leading-4 text-text-muted transition-colors duration-300 group-hover:text-text-secondary">
+                              {item.description}
+                            </span>
+                          </span>
+
+                          <ChevronRight
+                            size={16}
+                            className={cn(
+                              'mt-1 shrink-0 text-text-muted transition-all duration-300 ease-luxury',
+                              isActive
+                                ? 'translate-x-0 opacity-100 text-brand-600'
+                                : '-translate-x-1 opacity-0 group-hover:translate-x-0 group-hover:opacity-60'
+                            )}
+                          />
+                        </Link>
+                      );
+                    })}
+                  </div>
+                </section>
               );
             })}
           </div>
-        ))}
-      </nav>
+        </nav>
 
-      {/* Mode Toggle & Logout */}
-      <div className="border-t border-surface-3 p-3 space-y-1">
-        <button
-          onClick={toggleMode}
-          className={cn(
-            'flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors',
-            'hover:bg-surface-2'
-          )}
-        >
-          {isQuick ? <Zap size={18} className="text-brand-500" /> : <Moon size={18} className="text-brand-500" />}
-          <span className="text-text-secondary">
-            {isQuick ? 'Quick Mode' : 'Deep Mode'}
-          </span>
-          <span
-            className={cn(
-              'ml-auto h-5 w-9 rounded-full p-0.5 transition-colors',
-              isQuick ? 'bg-brand-500' : 'bg-surface-4'
-            )}
+        <div className="shell-nav-cluster px-2 py-2">
+          <button
+            type="button"
+            onClick={toggleMode}
+            className="nav-item group w-full pr-2"
           >
-            <span
-              className={cn(
-                'block h-4 w-4 rounded-full bg-white transition-transform',
-                !isQuick && 'translate-x-4'
-              )}
-            />
-          </span>
-        </button>
-        <button
-          onClick={async () => {
-            await logoutAction();
-            router.push('/login');
-            router.refresh();
-          }}
-          className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm text-text-muted transition-colors hover:bg-surface-2 hover:text-text-secondary"
-        >
-          <LogOut size={18} />
-          <span>Log out</span>
-        </button>
+            <span className="nav-icon-slot">
+              {isQuick ? <Zap size={18} /> : <Moon size={18} />}
+            </span>
+            <span className="min-w-0 flex-1 text-left">
+              <span className="block text-sm font-medium text-text-primary">
+                {isQuick ? 'Quick Mode' : 'Deep Mode'}
+              </span>
+              <span className="mt-0.5 block text-[11px] leading-4 text-text-muted">
+                {isQuick
+                  ? 'A brisk, capture-first posture for movement and triage.'
+                  : 'A slower, more deliberate posture for focus and depth.'}
+              </span>
+            </span>
+            <span className="shell-meta-pill ml-2 shrink-0">
+              <Sparkles size={12} />
+              Toggle
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={async () => {
+              await logoutAction();
+              router.push('/login');
+              router.refresh();
+            }}
+            className="nav-item mt-1 w-full pr-2 text-left text-text-secondary"
+          >
+            <span className="nav-icon-slot">
+              <LogOut size={18} />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-sm font-medium text-current">Log out</span>
+              <span className="mt-0.5 block text-[11px] leading-4 text-text-muted">
+                Step out of the current session and return to the login screen.
+              </span>
+            </span>
+          </button>
+        </div>
       </div>
     </aside>
   );

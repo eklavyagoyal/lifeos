@@ -51,13 +51,13 @@ function getSearchStatusLabel(status: AttachmentListItem['searchStatus']) {
 function getSearchStatusClassName(status: AttachmentListItem['searchStatus']) {
   switch (status) {
     case 'indexed':
-      return 'bg-green-500/10 text-green-700';
+      return 'border-[rgba(96,127,97,0.2)] bg-[rgba(228,239,229,0.92)] text-[rgb(78,107,81)]';
     case 'pending':
-      return 'bg-brand-100 text-brand-700';
+      return 'border-[rgba(90,131,188,0.18)] bg-[rgba(229,239,251,0.92)] text-[rgb(69,106,160)]';
     case 'failed':
-      return 'bg-red-500/10 text-red-700';
+      return 'border-[rgba(194,97,78,0.2)] bg-[rgba(252,231,227,0.92)] text-[rgb(155,77,62)]';
     default:
-      return 'bg-surface-2 text-text-muted';
+      return 'border-line-soft bg-surface-0/82 text-text-muted';
   }
 }
 
@@ -107,118 +107,123 @@ export function AttachmentsPanel({ itemType, itemId, attachments }: AttachmentsP
   };
 
   return (
-    <div className="card space-y-4">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Paperclip size={16} className="text-text-muted" />
+    <div className="detail-side-panel">
+      <div className="detail-panel-header">
+        <div className="flex min-w-0 items-start gap-3">
+          <div className="capture-icon-orb h-11 w-11 border-[rgba(108,136,185,0.18)] bg-[radial-gradient(circle_at_top,rgba(230,239,250,0.96),rgba(186,208,235,0.78))]">
+            <Paperclip size={16} className="text-[rgb(69,106,160)]" />
+          </div>
           <div>
-            <h3 className="text-sm font-semibold text-text-primary">Attachments</h3>
-            <p className="text-2xs text-text-muted">
-              Files are copied into your configured attachments directory.
+            <div className="section-kicker text-[0.58rem]">Attachments</div>
+            <h3 className="mt-2 text-lg font-semibold tracking-[-0.03em] text-text-primary">
+              Supporting material around the main record
+            </h3>
+            <p className="mt-1 text-sm leading-6 text-text-secondary">
+              Files are copied into your configured attachments directory and kept attached to this item as durable context.
             </p>
           </div>
         </div>
-        <span className="text-2xs text-text-muted">
+
+        <span className="shell-meta-pill">
           {attachments.length} file{attachments.length !== 1 ? 's' : ''}
         </span>
       </div>
 
-      <div className="rounded-lg border border-dashed border-surface-3 bg-surface-1 p-3">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-          <div className="flex-1 space-y-1.5">
-            <label className="block text-2xs font-medium uppercase tracking-wider text-text-muted">
-              Files
-            </label>
+      <div className="rounded-[1.35rem] border border-dashed border-line-soft bg-surface-0/66 p-4 shadow-soft">
+        <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(220px,0.55fr)_auto] lg:items-end">
+          <div className="space-y-1.5">
+            <label className="detail-field-label">Files</label>
             <input
               ref={fileInputRef}
               type="file"
               multiple
-              className="block w-full text-xs text-text-secondary file:mr-3 file:rounded-md file:border-0 file:bg-surface-2 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-text-primary hover:file:bg-surface-3"
+              className="block w-full text-xs text-text-secondary file:mr-3 file:rounded-[0.95rem] file:border-0 file:bg-surface-1 file:px-3 file:py-2 file:text-xs file:font-medium file:text-text-primary hover:file:bg-surface-hover"
             />
           </div>
-          <div className="w-full space-y-1.5 sm:w-56">
-            <label className="block text-2xs font-medium uppercase tracking-wider text-text-muted">
-              Label
-            </label>
+          <div className="space-y-1.5">
+            <label className="detail-field-label">Label</label>
             <input
               value={label}
               onChange={(event) => setLabel(event.target.value)}
-              placeholder="Optional note or caption"
-              className="w-full rounded-md border border-surface-3 bg-surface-0 px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-brand-primary"
+              placeholder="Optional caption or note"
+              className="detail-field-input"
             />
           </div>
           <button
             type="button"
             onClick={handleUpload}
             disabled={isPending}
-            className="inline-flex items-center justify-center gap-2 rounded-md bg-brand-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-700 disabled:opacity-50"
+            className="inline-flex items-center justify-center gap-2 rounded-[1rem] bg-brand-600 px-4 py-3 text-sm font-medium text-white transition-colors hover:bg-brand-700 disabled:opacity-50"
           >
             <FileUp size={14} />
             {isPending ? 'Uploading…' : 'Attach'}
           </button>
         </div>
         {error ? (
-          <p className="mt-2 text-xs text-status-danger">{error}</p>
+          <p className="mt-3 text-sm text-status-danger">{error}</p>
         ) : null}
       </div>
 
       {attachments.length === 0 ? (
-        <p className="text-xs text-text-muted">
-          No attachments yet. Upload files here to keep supporting material alongside this item.
+        <p className="text-sm leading-6 text-text-muted">
+          No attachments yet. Add PDFs, screenshots, notes, or other supporting artifacts when this record needs more context than text alone.
         </p>
       ) : (
-        <div className="space-y-2">
+        <div className="space-y-2.5">
           {attachments.map((attachment) => (
-            <div
-              key={attachment.linkId}
-              className="flex items-center gap-3 rounded-lg border border-surface-3 bg-surface-1 px-3 py-2"
-            >
-              <Paperclip size={14} className="text-text-muted" />
+            <div key={attachment.linkId} className="detail-list-row">
+              <div className="capture-icon-orb h-10 w-10 border-[rgba(121,95,67,0.14)] bg-[linear-gradient(135deg,rgba(255,251,245,0.9),rgba(245,235,219,0.78))]">
+                <Paperclip size={14} className="text-text-secondary" />
+              </div>
+
               <div className="min-w-0 flex-1">
                 <a
                   href={attachment.url}
                   target="_blank"
                   rel="noreferrer"
-                  className="block truncate text-sm text-text-primary hover:text-brand-600"
+                  className="block truncate text-sm font-medium text-text-primary transition-colors hover:text-brand-700"
                 >
                   {attachment.originalName}
                 </a>
-                <p className="truncate text-2xs text-text-muted">
+                <p className="truncate text-xs leading-5 text-text-muted">
                   {attachment.label ? `${attachment.label} · ` : ''}
                   {formatFileSize(attachment.fileSize)} · {attachment.sourceType}
                 </p>
-                <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                  <span className={`rounded-full px-1.5 py-0.5 text-2xs ${getSearchStatusClassName(attachment.searchStatus)}`}>
+                <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                  <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-2xs font-medium ${getSearchStatusClassName(attachment.searchStatus)}`}>
                     {getSearchStatusLabel(attachment.searchStatus)}
                   </span>
                   {attachment.sharedItemCount > 0 ? (
-                    <span className="rounded-full bg-surface-2 px-1.5 py-0.5 text-2xs text-text-muted">
+                    <span className="badge text-text-secondary">
                       Shared with {attachment.sharedItemCount} other item{attachment.sharedItemCount !== 1 ? 's' : ''}
                     </span>
                   ) : null}
                 </div>
                 {attachment.searchSummary ? (
-                  <p className="mt-1 line-clamp-2 text-2xs text-text-muted">
+                  <p className="mt-1.5 line-clamp-2 text-xs leading-5 text-text-secondary">
                     {attachment.searchSummary}
                   </p>
                 ) : null}
               </div>
-              <a
-                href={`${attachment.url}?download=1`}
-                className="rounded-md p-1.5 text-text-muted transition-colors hover:bg-surface-2 hover:text-text-primary"
-                title="Download"
-              >
-                <Download size={14} />
-              </a>
-              <button
-                type="button"
-                onClick={() => handleRemove(attachment.linkId)}
-                disabled={isPending}
-                className="rounded-md p-1.5 text-text-muted transition-colors hover:bg-surface-2 hover:text-status-danger disabled:opacity-50"
-                title="Remove link"
-              >
-                <Trash2 size={14} />
-              </button>
+
+              <div className="flex items-center gap-1">
+                <a
+                  href={`${attachment.url}?download=1`}
+                  className="rounded-full p-2 text-text-muted transition-colors hover:bg-surface-1 hover:text-text-primary"
+                  title="Download"
+                >
+                  <Download size={14} />
+                </a>
+                <button
+                  type="button"
+                  onClick={() => handleRemove(attachment.linkId)}
+                  disabled={isPending}
+                  className="rounded-full p-2 text-text-muted transition-colors hover:bg-surface-1 hover:text-status-danger disabled:opacity-50"
+                  title="Remove link"
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
             </div>
           ))}
         </div>

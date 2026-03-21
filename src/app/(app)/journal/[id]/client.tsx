@@ -78,6 +78,7 @@ export function JournalDetailClient({
 
   const handleUpdate = async (field: string, value: unknown) => {
     await updateJournalAction(entry.id, { [field]: value });
+    router.refresh();
   };
 
   const handleArchive = async () => {

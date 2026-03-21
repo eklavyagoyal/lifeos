@@ -61,6 +61,7 @@ export function NoteDetailClient({
 
   const handleUpdate = async (field: string, value: unknown) => {
     await updateNoteAction(note.id, { [field]: value });
+    router.refresh();
   };
 
   const handleArchive = async () => {

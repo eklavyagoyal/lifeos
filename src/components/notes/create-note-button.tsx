@@ -2,8 +2,12 @@
 
 import { useState } from 'react';
 import { createNoteAction } from '@/app/actions';
-import { Plus } from 'lucide-react';
+import { StickyNote } from 'lucide-react';
 import { cn } from '@/lib/cn';
+import {
+  SecondaryDialogShell,
+  SecondaryLaunchButton,
+} from '@/components/experience/secondary-create-dialog';
 
 export function CreateNoteButton() {
   const [isOpen, setIsOpen] = useState(false);
@@ -18,61 +22,66 @@ export function CreateNoteButton() {
 
   if (!isOpen) {
     return (
-      <button
+      <SecondaryLaunchButton
+        icon={StickyNote}
+        label="New note"
+        detail="Open a fresh page"
         onClick={() => setIsOpen(true)}
-        className={cn(
-          'flex items-center gap-1.5 rounded-md bg-brand-600 px-3 py-1.5',
-          'text-sm font-medium text-white hover:bg-brand-700 transition-colors'
-        )}
-      >
-        <Plus size={16} />
-        New Note
-      </button>
+      />
     );
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center pt-20 bg-black/30" onClick={() => setIsOpen(false)}>
+    <SecondaryDialogShell
+      open={isOpen}
+      onClose={() => setIsOpen(false)}
+      icon={StickyNote}
+      eyebrow="Commonplace"
+      title="Create a note"
+      description="Keep a reference, a working draft, or a small idea that wants a calmer home than the inbox."
+      footer={(
+        <>
+          <button
+            type="button"
+            onClick={() => setIsOpen(false)}
+            className="secondary-toolbar-button"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            form="note-create-form"
+            disabled={isSubmitting}
+            className={cn(
+              'secondary-toolbar-button bg-[linear-gradient(135deg,rgba(201,143,88,0.96)_0%,rgba(174,93,44,0.92)_100%)] text-white',
+              'border-[rgba(174,93,44,0.18)] hover:text-white disabled:opacity-50'
+            )}
+          >
+            {isSubmitting ? 'Creating...' : 'Create Note'}
+          </button>
+        </>
+      )}
+    >
       <form
+        id="note-create-form"
         action={handleSubmit}
-        onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-md rounded-lg border border-surface-3 bg-surface-0 p-4 shadow-lg space-y-3"
+        className="space-y-3"
       >
-        <h3 className="text-sm font-semibold text-text-primary">New Note</h3>
         <input
           autoFocus
           name="title"
           type="text"
           required
           placeholder="Note title"
-          className="w-full rounded-md border border-surface-3 bg-surface-0 px-3 py-2 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
+          className="secondary-input"
         />
         <textarea
           name="body"
           placeholder="Start writing... (markdown supported)"
           rows={6}
-          className="w-full resize-none rounded-md border border-surface-3 bg-surface-0 px-3 py-2 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
+          className="secondary-textarea resize-none"
         />
-        <div className="flex justify-end gap-2">
-          <button
-            type="button"
-            onClick={() => setIsOpen(false)}
-            className="rounded-md px-3 py-1.5 text-sm text-text-secondary hover:bg-surface-2"
-          >
-            Cancel
-          </button>
-          <button
-            type="submit"
-            disabled={isSubmitting}
-            className={cn(
-              'rounded-md bg-brand-600 px-4 py-1.5 text-sm font-medium text-white',
-              'hover:bg-brand-700 disabled:opacity-50 transition-colors'
-            )}
-          >
-            {isSubmitting ? 'Creating...' : 'Create Note'}
-          </button>
-        </div>
       </form>
-    </div>
+    </SecondaryDialogShell>
   );
 }

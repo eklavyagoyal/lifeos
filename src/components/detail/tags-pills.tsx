@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { X, Plus } from 'lucide-react';
+import { Plus, X } from 'lucide-react';
 import { addTagAction, removeTagAction } from '@/app/actions';
 
 interface Tag {
@@ -38,18 +38,19 @@ export function TagsPills({ itemType, itemId, tags }: TagsPillsProps) {
   };
 
   return (
-    <div className="flex flex-wrap items-center gap-1.5">
+    <div className="flex flex-wrap items-center gap-2">
       {tags.map((tag) => (
         <span
           key={tag.itemTagId}
-          className="group inline-flex items-center gap-1 rounded-full bg-surface-2 px-2.5 py-0.5 text-2xs font-medium text-text-secondary"
+          className="group inline-flex items-center gap-1.5 rounded-full border border-line-soft bg-surface-0/82 px-3 py-1.5 text-xs font-medium text-text-secondary shadow-soft"
         >
-          {tag.name}
+          <span>#{tag.name}</span>
           <button
+            type="button"
             onClick={() => handleRemove(tag.id)}
-            className="opacity-0 group-hover:opacity-100 transition-opacity text-text-muted hover:text-status-danger"
+            className="rounded-full p-0.5 text-text-muted opacity-0 transition-all hover:bg-surface-1 hover:text-status-danger group-hover:opacity-100"
           >
-            <X size={10} />
+            <X size={11} />
           </button>
         </span>
       ))}
@@ -58,10 +59,10 @@ export function TagsPills({ itemType, itemId, tags }: TagsPillsProps) {
         <input
           autoFocus
           value={tagInput}
-          onChange={(e) => setTagInput(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') handleAdd();
-            if (e.key === 'Escape') {
+          onChange={(event) => setTagInput(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') handleAdd();
+            if (event.key === 'Escape') {
               setIsAdding(false);
               setTagInput('');
             }
@@ -74,14 +75,15 @@ export function TagsPills({ itemType, itemId, tags }: TagsPillsProps) {
             }
           }}
           placeholder="Tag name..."
-          className="rounded-full border border-brand-300 bg-surface-0 px-2.5 py-0.5 text-2xs outline-none focus:ring-1 focus:ring-brand-200 w-24"
+          className="detail-field-input w-32 rounded-full px-3 py-1.5 text-xs"
         />
       ) : (
         <button
+          type="button"
           onClick={() => setIsAdding(true)}
-          className="inline-flex items-center gap-0.5 rounded-full border border-dashed border-surface-4 px-2 py-0.5 text-2xs text-text-muted hover:border-brand-300 hover:text-brand-600 transition-colors"
+          className="inline-flex items-center gap-1 rounded-full border border-dashed border-line-soft bg-surface-0/68 px-3 py-1.5 text-xs font-medium text-text-muted transition-colors hover:border-brand-300 hover:bg-surface-hover hover:text-brand-700"
         >
-          <Plus size={10} />
+          <Plus size={12} />
           Tag
         </button>
       )}

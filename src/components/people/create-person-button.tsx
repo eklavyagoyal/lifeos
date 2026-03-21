@@ -2,8 +2,12 @@
 
 import { useState } from 'react';
 import { createEntityAction } from '@/app/actions';
-import { Plus } from 'lucide-react';
+import { Users } from 'lucide-react';
 import { cn } from '@/lib/cn';
+import {
+  SecondaryDialogShell,
+  SecondaryLaunchButton,
+} from '@/components/experience/secondary-create-dialog';
 
 export function CreatePersonButton() {
   const [isOpen, setIsOpen] = useState(false);
@@ -19,75 +23,80 @@ export function CreatePersonButton() {
 
   if (!isOpen) {
     return (
-      <button
+      <SecondaryLaunchButton
+        icon={Users}
+        label="Add person"
+        detail="Start a relationship card"
         onClick={() => setIsOpen(true)}
-        className={cn(
-          'flex items-center gap-1.5 rounded-md bg-brand-600 px-3 py-1.5',
-          'text-sm font-medium text-white hover:bg-brand-700 transition-colors'
-        )}
-      >
-        <Plus size={16} />
-        Add Person
-      </button>
+      />
     );
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center pt-20 bg-black/30" onClick={() => setIsOpen(false)}>
+    <SecondaryDialogShell
+      open={isOpen}
+      onClose={() => setIsOpen(false)}
+      icon={Users}
+      eyebrow="Relationship Ledger"
+      title="Add a person"
+      description="Capture just enough context to remember who they are and why they matter. You can deepen the page later."
+      footer={(
+        <>
+          <button
+            type="button"
+            onClick={() => setIsOpen(false)}
+            className="secondary-toolbar-button"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            form="person-create-form"
+            disabled={isSubmitting}
+            className={cn(
+              'secondary-toolbar-button bg-[linear-gradient(135deg,rgba(201,143,88,0.96)_0%,rgba(174,93,44,0.92)_100%)] text-white',
+              'border-[rgba(174,93,44,0.18)] hover:text-white disabled:opacity-50'
+            )}
+          >
+            {isSubmitting ? 'Adding...' : 'Add Person'}
+          </button>
+        </>
+      )}
+    >
       <form
+        id="person-create-form"
         action={handleSubmit}
-        onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-md rounded-lg border border-surface-3 bg-surface-0 p-4 shadow-lg space-y-3"
+        className="space-y-3"
       >
-        <h3 className="text-sm font-semibold text-text-primary">Add Person</h3>
         <input
           autoFocus
           name="title"
           type="text"
           required
           placeholder="Name"
-          className="w-full rounded-md border border-surface-3 bg-surface-0 px-3 py-2 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
+          className="secondary-input"
         />
-        <div className="flex gap-2">
+        <div className="grid gap-3 sm:grid-cols-2">
           <input
             name="relationship"
             type="text"
             placeholder="Relationship (friend, mentor...)"
-            className="flex-1 rounded-md border border-surface-3 bg-surface-0 px-3 py-2 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
+            className="secondary-input"
           />
           <input
             name="company"
             type="text"
             placeholder="Company / Context"
-            className="flex-1 rounded-md border border-surface-3 bg-surface-0 px-3 py-2 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
+            className="secondary-input"
           />
         </div>
         <textarea
           name="body"
           placeholder="Notes about this person..."
           rows={3}
-          className="w-full resize-none rounded-md border border-surface-3 bg-surface-0 px-3 py-2 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
+          className="secondary-textarea min-h-[8rem] resize-none"
         />
-        <div className="flex justify-end gap-2">
-          <button
-            type="button"
-            onClick={() => setIsOpen(false)}
-            className="rounded-md px-3 py-1.5 text-sm text-text-secondary hover:bg-surface-2"
-          >
-            Cancel
-          </button>
-          <button
-            type="submit"
-            disabled={isSubmitting}
-            className={cn(
-              'rounded-md bg-brand-600 px-4 py-1.5 text-sm font-medium text-white',
-              'hover:bg-brand-700 disabled:opacity-50 transition-colors'
-            )}
-          >
-            {isSubmitting ? 'Adding...' : 'Add Person'}
-          </button>
-        </div>
       </form>
-    </div>
+    </SecondaryDialogShell>
   );
 }

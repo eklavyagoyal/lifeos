@@ -1,6 +1,6 @@
 import { db } from '../db';
 import { tasks } from '../db/schema';
-import { eq, and, isNull, desc, asc, lte, or } from 'drizzle-orm';
+import { eq, and, isNull, desc, asc, lte, or, gte, count } from 'drizzle-orm';
 import { newId, now, todayISO } from '@/lib/utils';
 import type { TaskStatus, TaskPriority } from '@/lib/types';
 import { removeSearchDocument, syncSearchDocument } from './search';
@@ -175,6 +175,27 @@ export function getTodayTasks() {
     )
     .orderBy(asc(tasks.sortOrder), desc(tasks.createdAt))
     .all();
+}
+
+/** Count tasks completed on a specific local ISO date */
+export function getCompletedTaskCountForDate(date: string = todayISO()) {
+  const start = new Date(`${date}T00:00:00`).getTime();
+  const end = new Date(`${date}T23:59:59.999`).getTime();
+
+  const result = db
+    .select({ value: count() })
+    .from(tasks)
+    .where(
+      and(
+        isNull(tasks.archivedAt),
+        eq(tasks.status, 'done'),
+        gte(tasks.completedAt, start),
+        lte(tasks.completedAt, end)
+      )
+    )
+    .get();
+
+  return result?.value ?? 0;
 }
 
 /** Get all active tasks (not archived, not done) */

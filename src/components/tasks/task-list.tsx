@@ -2,10 +2,10 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { Circle, CheckCircle2, Calendar, Flag } from 'lucide-react';
+import { Circle, CheckCircle2, Calendar, Flag, Plus } from 'lucide-react';
 import { toggleTaskAction, createTaskAction } from '@/app/actions';
 import { cn } from '@/lib/cn';
-import { PRIORITY_COLORS } from '@/lib/constants';
+import { PRIORITY_COLORS, PRIORITY_LABELS } from '@/lib/constants';
 import { formatISODate } from '@/lib/utils';
 
 interface Task {
@@ -22,11 +22,18 @@ interface TaskListProps {
   tasks: Task[];
   showAddButton?: boolean;
   emptyMessage?: string;
+  variant?: 'default' | 'today';
 }
 
-export function TaskList({ tasks, showAddButton = true, emptyMessage = 'No tasks' }: TaskListProps) {
+export function TaskList({
+  tasks,
+  showAddButton = true,
+  emptyMessage = 'No tasks',
+  variant = 'default',
+}: TaskListProps) {
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [isAdding, setIsAdding] = useState(false);
+  const isToday = variant === 'today';
 
   const handleAddTask = async () => {
     if (!newTaskTitle.trim()) return;
@@ -38,18 +45,32 @@ export function TaskList({ tasks, showAddButton = true, emptyMessage = 'No tasks
   };
 
   return (
-    <div className="space-y-0.5">
+    <div className={cn(isToday ? 'space-y-2.5' : 'space-y-2')}>
       {tasks.length === 0 && !isAdding && (
-        <p className="py-4 text-center text-sm text-text-muted">{emptyMessage}</p>
+        <div
+          className={cn(
+            'secondary-empty-state py-8 text-sm text-text-muted',
+            isToday && 'rounded-[1.4rem]'
+          )}
+        >
+          {emptyMessage}
+        </div>
       )}
 
       {tasks.map((task) => (
-        <TaskItem key={task.id} task={task} />
+        <TaskItem key={task.id} task={task} variant={variant} />
       ))}
 
       {isAdding && (
-        <div className="flex items-center gap-2 py-1.5 pl-1">
-          <Circle size={18} className="text-text-muted flex-shrink-0" />
+        <div
+          className={cn(
+            'secondary-inline-form flex items-center gap-3 px-3 py-3',
+            isToday && 'rounded-[1.45rem]'
+          )}
+        >
+          <span className="secondary-icon-badge h-9 w-9 rounded-[1rem]">
+            <Circle size={17} />
+          </span>
           <input
             autoFocus
             type="text"
@@ -64,7 +85,7 @@ export function TaskList({ tasks, showAddButton = true, emptyMessage = 'No tasks
               else { setIsAdding(false); setNewTaskTitle(''); }
             }}
             placeholder="Task title..."
-            className="flex-1 bg-transparent text-sm outline-none placeholder:text-text-muted"
+            className="secondary-input flex-1 border-0 bg-transparent px-0 py-0 text-sm shadow-none"
           />
         </div>
       )}
@@ -72,19 +93,31 @@ export function TaskList({ tasks, showAddButton = true, emptyMessage = 'No tasks
       {showAddButton && !isAdding && (
         <button
           onClick={() => setIsAdding(true)}
-          className="flex w-full items-center gap-2 rounded-md px-1 py-1.5 text-sm text-text-muted hover:text-text-secondary hover:bg-surface-1 transition-colors"
+          className={cn(
+            'secondary-row w-full border-dashed text-left',
+            isToday &&
+              'rounded-[1.45rem] px-3 py-3'
+          )}
         >
-          <span className="text-lg leading-none">+</span>
-          <span>Add task</span>
+          <span className="secondary-icon-badge h-9 w-9 rounded-[1rem]">
+            <Plus size={16} />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-sm font-medium text-text-primary">Add task</span>
+            <span className="mt-0.5 block text-2xs text-text-muted">
+              Drop a new commitment into the list without leaving the page.
+            </span>
+          </span>
         </button>
       )}
     </div>
   );
 }
 
-function TaskItem({ task }: { task: Task }) {
+function TaskItem({ task, variant }: { task: Task; variant: 'default' | 'today' }) {
   const [isToggling, setIsToggling] = useState(false);
   const isDone = task.status === 'done';
+  const isToday = variant === 'today';
 
   const handleToggle = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -98,14 +131,19 @@ function TaskItem({ task }: { task: Task }) {
     <Link href={`/tasks/${task.id}`}>
       <div
         className={cn(
-          'group flex items-center gap-2 rounded-md px-1 py-1.5 transition-colors hover:bg-surface-1',
+          isToday
+            ? 'card-interactive secondary-row group rounded-[1.45rem] px-3.5 py-3.5'
+            : 'secondary-row group px-3 py-3',
           isToggling && 'opacity-50'
         )}
       >
         <button
           onClick={handleToggle}
           disabled={isToggling}
-          className="flex-shrink-0 text-text-muted hover:text-brand-500 transition-colors"
+          className={cn(
+            'mt-0.5 flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-[1rem] border transition-all duration-300 ease-luxury',
+            optimisticButtonState(isDone)
+          )}
         >
           {isDone ? (
             <CheckCircle2 size={18} className="text-status-success" />
@@ -114,27 +152,67 @@ function TaskItem({ task }: { task: Task }) {
           )}
         </button>
 
-        <span
-          className={cn(
-            'flex-1 text-sm',
-            isDone && 'line-through text-text-muted'
-          )}
-        >
-          {task.title}
-        </span>
-
-        <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
-          {task.priority && (
-            <Flag size={14} className={PRIORITY_COLORS[task.priority] || 'text-text-muted'} />
-          )}
-          {task.dueDate && (
-            <span className="text-2xs text-text-tertiary flex items-center gap-0.5">
-              <Calendar size={12} />
-              {formatISODate(task.dueDate)}
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start justify-between gap-3">
+            <span
+              className={cn(
+                isToday ? 'min-w-0 text-sm font-medium' : 'text-sm font-medium',
+                isDone && 'line-through text-text-muted'
+              )}
+            >
+              {task.title}
             </span>
-          )}
+
+            {isToday ? (
+              <div className="flex flex-wrap items-center justify-end gap-1.5">
+                {task.priority && (
+                  <span className="secondary-chip">
+                    <Flag size={11} className={PRIORITY_COLORS[task.priority] || 'text-text-muted'} />
+                    {PRIORITY_LABELS[task.priority] ?? task.priority.toUpperCase()}
+                  </span>
+                )}
+                {task.dueDate && (
+                  <span className="secondary-chip">
+                    <Calendar size={11} />
+                    {formatISODate(task.dueDate)}
+                  </span>
+                )}
+              </div>
+            ) : null}
+          </div>
+
+          {!isToday && (task.priority || task.dueDate || task.scheduledDate) ? (
+            <div className="mt-2 flex flex-wrap items-center gap-1.5">
+              {task.priority ? (
+                <span className="secondary-chip">
+                  <Flag size={11} className={PRIORITY_COLORS[task.priority] || 'text-text-muted'} />
+                  {PRIORITY_LABELS[task.priority] ?? task.priority.toUpperCase()}
+                </span>
+              ) : null}
+              {task.dueDate ? (
+                <span className="secondary-chip">
+                  <Calendar size={11} />
+                  Due {formatISODate(task.dueDate)}
+                </span>
+              ) : null}
+              {!task.dueDate && task.scheduledDate ? (
+                <span className="secondary-chip">
+                  <Calendar size={11} />
+                  Scheduled {formatISODate(task.scheduledDate)}
+                </span>
+              ) : null}
+            </div>
+          ) : null}
         </div>
       </div>
     </Link>
   );
+}
+
+function optimisticButtonState(isDone: boolean) {
+  if (isDone) {
+    return 'border-[rgba(34,197,94,0.22)] bg-[rgba(34,197,94,0.08)] text-status-success shadow-[0_12px_22px_-18px_rgba(34,197,94,0.55)]';
+  }
+
+  return 'border-line-soft bg-surface-1/70 text-text-muted hover:border-brand-300 hover:text-brand-500';
 }

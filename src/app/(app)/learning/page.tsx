@@ -28,14 +28,20 @@ export default function LearningPage() {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold text-text-primary">Learning</h1>
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <div className="section-kicker">Apprenticeship</div>
+          <h1 className="mt-2 text-2xl font-semibold text-text-primary">Learning</h1>
+          <p className="mt-1 text-sm leading-6 text-text-secondary">
+            This shelf should read like an evolving study table: calm, legible, and still clearly part of the same world as the flagship routes.
+          </p>
+        </div>
         <CreateLearningButton />
       </div>
 
       {items.length === 0 ? (
-        <div className="card py-12 text-center">
-          <GraduationCap size={32} className="mx-auto text-text-muted mb-2" />
+        <div className="secondary-empty-state py-12">
+          <GraduationCap size={32} className="mb-2 text-text-muted" />
           <p className="text-sm text-text-secondary">Nothing tracked yet</p>
           <p className="text-2xs text-text-muted mt-1">
             Add a book, article, or course to start tracking your learning.
@@ -48,14 +54,14 @@ export default function LearningPage() {
             const status = meta?.status;
             return (
               <Link key={item.id} href={`/learning/${item.id}`}>
-                <div className="card hover:border-brand-200 cursor-pointer transition-colors">
+                <div className="secondary-card cursor-pointer">
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex items-center gap-2 min-w-0 flex-1">
                       <span className="text-base shrink-0">{TYPE_EMOJI[item.entityType] ?? '📖'}</span>
                       <h3 className="text-sm font-medium text-text-primary truncate">{item.title}</h3>
                     </div>
                     {status && (
-                      <span className={`badge text-2xs shrink-0 ${STATUS_COLORS[status] ?? 'bg-surface-2 text-text-muted'}`}>
+                      <span className={`secondary-chip text-2xs shrink-0 ${STATUS_COLORS[status] ?? 'bg-surface-2 text-text-muted'}`}>
                         {status.replace(/_/g, ' ')}
                       </span>
                     )}
@@ -67,12 +73,12 @@ export default function LearningPage() {
                     <p className="mt-1 text-2xs text-text-tertiary">{meta.platform}</p>
                   )}
                   {item.body && (
-                    <p className="mt-1 text-2xs text-text-tertiary line-clamp-2">
+                    <p className="mt-3 text-sm leading-6 text-text-tertiary line-clamp-3">
                       {item.body.slice(0, 120)}
                     </p>
                   )}
-                  <div className="mt-2 flex items-center gap-2">
-                    <span className="badge bg-surface-2 text-text-muted text-2xs capitalize">
+                  <div className="mt-4 flex items-center gap-2">
+                    <span className="secondary-chip text-2xs capitalize">
                       {item.entityType}
                     </span>
                     <span className="text-2xs text-text-muted">

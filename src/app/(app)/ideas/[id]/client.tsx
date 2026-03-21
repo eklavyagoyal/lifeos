@@ -61,6 +61,7 @@ export function IdeaDetailClient({
 
   const handleUpdate = async (field: string, value: unknown) => {
     await updateIdeaAction(idea.id, { [field]: value });
+    router.refresh();
   };
 
   const handleArchive = async () => {

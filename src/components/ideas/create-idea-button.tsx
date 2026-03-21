@@ -2,8 +2,12 @@
 
 import { useState } from 'react';
 import { createIdeaAction } from '@/app/actions';
-import { Plus } from 'lucide-react';
+import { Lightbulb } from 'lucide-react';
 import { cn } from '@/lib/cn';
+import {
+  SecondaryDialogShell,
+  SecondaryLaunchButton,
+} from '@/components/experience/secondary-create-dialog';
 
 export function CreateIdeaButton() {
   const [isOpen, setIsOpen] = useState(false);
@@ -18,46 +22,70 @@ export function CreateIdeaButton() {
 
   if (!isOpen) {
     return (
-      <button
+      <SecondaryLaunchButton
+        icon={Lightbulb}
+        label="New idea"
+        detail="Capture a seed"
         onClick={() => setIsOpen(true)}
-        className={cn(
-          'flex items-center gap-1.5 rounded-md bg-brand-600 px-3 py-1.5',
-          'text-sm font-medium text-white hover:bg-brand-700 transition-colors'
-        )}
-      >
-        <Plus size={16} />
-        New Idea
-      </button>
+      />
     );
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center pt-20 bg-black/30" onClick={() => setIsOpen(false)}>
+    <SecondaryDialogShell
+      open={isOpen}
+      onClose={() => setIsOpen(false)}
+      icon={Lightbulb}
+      eyebrow="Spark Capture"
+      title="Capture a new idea"
+      description="Keep the first pass small and alive. The goal is to preserve the spark before it gets forced into structure."
+      footer={(
+        <>
+          <button
+            type="button"
+            onClick={() => setIsOpen(false)}
+            className="secondary-toolbar-button"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            form="idea-create-form"
+            disabled={isSubmitting}
+            className={cn(
+              'secondary-toolbar-button bg-[linear-gradient(135deg,rgba(201,143,88,0.96)_0%,rgba(174,93,44,0.92)_100%)] text-white',
+              'border-[rgba(174,93,44,0.18)] hover:text-white disabled:opacity-50'
+            )}
+          >
+            {isSubmitting ? 'Capturing...' : 'Capture Idea'}
+          </button>
+        </>
+      )}
+    >
       <form
+        id="idea-create-form"
         action={handleSubmit}
-        onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-md rounded-lg border border-surface-3 bg-surface-0 p-4 shadow-lg space-y-3"
+        className="space-y-3"
       >
-        <h3 className="text-sm font-semibold text-text-primary">New Idea</h3>
         <input
           autoFocus
           name="title"
           type="text"
           required
           placeholder="Idea title"
-          className="w-full rounded-md border border-surface-3 bg-surface-0 px-3 py-2 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
+          className="secondary-input"
         />
         <input
           name="summary"
           type="text"
           placeholder="Quick summary (one-liner)"
-          className="w-full rounded-md border border-surface-3 bg-surface-0 px-3 py-2 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
+          className="secondary-input"
         />
-        <div className="flex gap-2">
+        <div className="grid gap-3 sm:grid-cols-2">
           <select
             name="stage"
             defaultValue="seed"
-            className="flex-1 rounded-md border border-surface-3 bg-surface-0 px-3 py-2 text-sm outline-none focus:border-brand-400"
+            className="secondary-select"
           >
             <option value="seed">🌱 Seed</option>
             <option value="developing">🌿 Developing</option>
@@ -67,29 +95,10 @@ export function CreateIdeaButton() {
             name="theme"
             type="text"
             placeholder="Theme (optional)"
-            className="flex-1 rounded-md border border-surface-3 bg-surface-0 px-3 py-2 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
+            className="secondary-input"
           />
         </div>
-        <div className="flex justify-end gap-2">
-          <button
-            type="button"
-            onClick={() => setIsOpen(false)}
-            className="rounded-md px-3 py-1.5 text-sm text-text-secondary hover:bg-surface-2"
-          >
-            Cancel
-          </button>
-          <button
-            type="submit"
-            disabled={isSubmitting}
-            className={cn(
-              'rounded-md bg-brand-600 px-4 py-1.5 text-sm font-medium text-white',
-              'hover:bg-brand-700 disabled:opacity-50 transition-colors'
-            )}
-          >
-            {isSubmitting ? 'Capturing...' : 'Capture Idea'}
-          </button>
-        </div>
       </form>
-    </div>
+    </SecondaryDialogShell>
   );
 }

@@ -1,4 +1,4 @@
-import { Sidebar } from '@/components/layout/sidebar';
+import { AppShellFrame } from '@/components/layout/app-shell-frame';
 import { assertDatabaseReadyForRequests } from '@/server/services/runtime';
 
 /**
@@ -15,13 +15,6 @@ export default function AppLayout({
   }
 
   return (
-    <div className="flex min-h-screen">
-      <Sidebar />
-      <main className="ml-sidebar flex-1 min-h-screen">
-        <div className="mx-auto max-w-5xl px-6 py-6">
-          {children}
-        </div>
-      </main>
-    </div>
+    <AppShellFrame>{children}</AppShellFrame>
   );
 }

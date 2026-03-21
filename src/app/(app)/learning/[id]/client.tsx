@@ -84,11 +84,13 @@ export function LearningDetailClient({
 
   const handleUpdate = async (field: string, value: unknown) => {
     await updateEntityAction(entity.id, { [field]: value });
+    router.refresh();
   };
 
   const handleMetadataUpdate = async (key: string, value: unknown) => {
     const newMeta = { ...meta, [key]: value };
     await updateEntityAction(entity.id, { metadata: newMeta });
+    router.refresh();
   };
 
   const handleArchive = async () => {

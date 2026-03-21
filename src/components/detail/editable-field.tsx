@@ -46,38 +46,36 @@ export function EditableField({
 
   if (isEditing) {
     return (
-      <div className="space-y-1">
-        <label className="text-2xs font-medium uppercase tracking-wider text-text-muted">
-          {label}
-        </label>
+      <div className="detail-field-card detail-field-card-editing space-y-3">
+        <div className="detail-field-label">{label}</div>
         {type === 'textarea' ? (
           <textarea
             autoFocus
             value={editValue}
-            onChange={(e) => setEditValue(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Escape') handleCancel();
-              if (e.key === 'Enter' && e.metaKey) handleSave();
+            onChange={(event) => setEditValue(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Escape') handleCancel();
+              if (event.key === 'Enter' && event.metaKey) handleSave();
             }}
             placeholder={placeholder}
             rows={4}
-            className="w-full rounded-md border border-brand-300 bg-surface-0 px-3 py-2 text-sm text-text-primary outline-none focus:ring-2 focus:ring-brand-100 resize-y"
+            className="detail-field-textarea"
           />
         ) : type === 'select' && options ? (
           <select
             autoFocus
             value={editValue}
-            onChange={(e) => {
-              setEditValue(e.target.value);
-              onSave(e.target.value);
+            onChange={(event) => {
+              setEditValue(event.target.value);
+              onSave(event.target.value);
               setIsEditing(false);
             }}
-            className="w-full rounded-md border border-brand-300 bg-surface-0 px-3 py-2 text-sm text-text-primary outline-none focus:ring-2 focus:ring-brand-100"
+            className="detail-field-select"
           >
             <option value="">—</option>
-            {options.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
+            {options.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
               </option>
             ))}
           </select>
@@ -86,58 +84,70 @@ export function EditableField({
             autoFocus
             type={type}
             value={editValue}
-            onChange={(e) => setEditValue(e.target.value)}
+            onChange={(event) => setEditValue(event.target.value)}
             onBlur={handleSave}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') handleSave();
-              if (e.key === 'Escape') handleCancel();
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') handleSave();
+              if (event.key === 'Escape') handleCancel();
             }}
             placeholder={placeholder}
-            className="w-full rounded-md border border-brand-300 bg-surface-0 px-3 py-2 text-sm text-text-primary outline-none focus:ring-2 focus:ring-brand-100"
+            className="detail-field-input"
           />
         )}
-        {type === 'textarea' && (
+
+        {type === 'textarea' ? (
           <div className="flex gap-2">
             <button
+              type="button"
               onClick={handleSave}
-              className="rounded-md bg-brand-600 px-3 py-1 text-2xs font-medium text-white hover:bg-brand-700 transition-colors"
+              className="rounded-[0.95rem] bg-brand-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-brand-700"
             >
               Save
             </button>
             <button
+              type="button"
               onClick={handleCancel}
-              className="rounded-md px-3 py-1 text-2xs font-medium text-text-muted hover:bg-surface-2 transition-colors"
+              className="rounded-[0.95rem] border border-line-soft bg-surface-0/76 px-3 py-1.5 text-xs font-medium text-text-secondary transition-colors hover:border-brand-300 hover:bg-surface-hover"
             >
               Cancel
             </button>
           </div>
-        )}
+        ) : null}
       </div>
     );
   }
 
   return (
-    <div
+    <button
+      type="button"
       onClick={() => setIsEditing(true)}
-      className="group cursor-pointer space-y-0.5"
+      className={cn(
+        'detail-field-card group',
+        type === 'textarea' && 'min-h-[8.5rem]'
+      )}
     >
-      <div className="flex items-center gap-1.5">
-        <span className="text-2xs font-medium uppercase tracking-wider text-text-muted">
-          {label}
+      <div className="flex items-center justify-between gap-3">
+        <span className="detail-field-label">{label}</span>
+        <span className="inline-flex items-center gap-1 text-2xs text-text-muted opacity-0 transition-opacity group-hover:opacity-100">
+          <Pencil size={11} />
+          Edit
         </span>
-        <Pencil
-          size={10}
-          className="text-text-muted opacity-0 group-hover:opacity-100 transition-opacity"
-        />
       </div>
-      <p
+
+      <div
         className={cn(
-          'text-sm',
-          value ? 'text-text-primary' : 'text-text-muted italic'
+          'mt-3',
+          type === 'textarea'
+            ? value
+              ? 'whitespace-pre-wrap text-sm leading-7 text-text-primary'
+              : 'text-sm italic text-text-muted'
+            : value || selectedOption
+              ? 'text-sm font-medium leading-6 text-text-primary'
+              : 'text-sm italic text-text-muted'
         )}
       >
         {selectedOption?.label || value || emptyLabel}
-      </p>
-    </div>
+      </div>
+    </button>
   );
 }

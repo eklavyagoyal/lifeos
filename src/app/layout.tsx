@@ -16,8 +16,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
-      <body className="font-sans">
+    <html lang="en" className="bg-surface-1">
+      <body className="font-sans text-text-primary">
         <ModeProvider>
           <PwaProvider />
           {children}

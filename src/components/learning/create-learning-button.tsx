@@ -2,8 +2,12 @@
 
 import { useState } from 'react';
 import { createEntityAction } from '@/app/actions';
-import { Plus } from 'lucide-react';
+import { GraduationCap } from 'lucide-react';
 import { cn } from '@/lib/cn';
+import {
+  SecondaryDialogShell,
+  SecondaryLaunchButton,
+} from '@/components/experience/secondary-create-dialog';
 
 type LearningType = 'book' | 'article' | 'course';
 
@@ -23,43 +27,72 @@ export function CreateLearningButton() {
 
   if (!isOpen) {
     return (
-      <button
+      <SecondaryLaunchButton
+        icon={GraduationCap}
+        label="Add item"
+        detail="Open the learning shelf"
         onClick={() => setIsOpen(true)}
-        className={cn(
-          'flex items-center gap-1.5 rounded-md bg-brand-600 px-3 py-1.5',
-          'text-sm font-medium text-white hover:bg-brand-700 transition-colors'
-        )}
-      >
-        <Plus size={16} />
-        Add Item
-      </button>
+      />
     );
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center pt-20 bg-black/30" onClick={() => setIsOpen(false)}>
+    <SecondaryDialogShell
+      open={isOpen}
+      onClose={() => setIsOpen(false)}
+      icon={GraduationCap}
+      eyebrow="Learning Shelf"
+      title="Add a learning item"
+      description="Track what you are reading, studying, or working through without turning the first capture into admin work."
+      footer={(
+        <>
+          <button
+            type="button"
+            onClick={() => setIsOpen(false)}
+            className="secondary-toolbar-button"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            form="learning-create-form"
+            disabled={isSubmitting}
+            className={cn(
+              'secondary-toolbar-button bg-[linear-gradient(135deg,rgba(201,143,88,0.96)_0%,rgba(174,93,44,0.92)_100%)] text-white',
+              'border-[rgba(174,93,44,0.18)] hover:text-white disabled:opacity-50'
+            )}
+          >
+            {isSubmitting ? 'Adding...' : `Add ${learningType}`}
+          </button>
+        </>
+      )}
+    >
       <form
+        id="learning-create-form"
         action={handleSubmit}
-        onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-md rounded-lg border border-surface-3 bg-surface-0 p-4 shadow-lg space-y-3"
+        className="space-y-3"
       >
-        <h3 className="text-sm font-semibold text-text-primary">Add Learning Item</h3>
-
-        {/* Type selector */}
-        <div className="flex gap-1 rounded-md bg-surface-1 p-1">
+        <div className="grid gap-2 rounded-[1.15rem] border border-[rgba(121,95,67,0.11)] bg-[rgba(255,251,245,0.66)] p-2 shadow-[inset_0_1px_0_rgba(255,252,246,0.82)] sm:grid-cols-3">
           {(['book', 'article', 'course'] as const).map((t) => (
             <button
               key={t}
               type="button"
               onClick={() => setLearningType(t)}
               className={cn(
-                'flex-1 rounded-md px-3 py-1.5 text-sm capitalize transition-colors',
+                'secondary-launcher min-h-[3.3rem] justify-start px-3 py-2 text-left capitalize',
                 learningType === t
-                  ? 'bg-surface-0 font-medium text-text-primary shadow-sm'
+                  ? 'border-[rgba(174,93,44,0.18)] bg-[linear-gradient(135deg,rgba(255,249,241,0.96)_0%,rgba(244,232,216,0.82)_100%)] text-text-primary'
                   : 'text-text-tertiary hover:text-text-secondary'
               )}
             >
-              {t === 'book' ? '📚' : t === 'article' ? '📄' : '🎓'} {t}
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-medium">
+                  {t === 'book' ? '📚' : t === 'article' ? '📄' : '🎓'} {t}
+                </span>
+                <span className="mt-0.5 block text-2xs leading-5 text-text-muted">
+                  {t === 'book' ? 'Books and long-form reading' : t === 'article' ? 'Articles and references' : 'Courses and guided learning'}
+                </span>
+              </span>
             </button>
           ))}
         </div>
@@ -70,16 +103,16 @@ export function CreateLearningButton() {
           type="text"
           required
           placeholder={learningType === 'book' ? 'Book title' : learningType === 'article' ? 'Article title' : 'Course name'}
-          className="w-full rounded-md border border-surface-3 bg-surface-0 px-3 py-2 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
+          className="secondary-input"
         />
 
-        <div className="flex gap-2">
+        <div className="grid gap-3">
           {learningType === 'book' && (
             <input
               name="author"
               type="text"
               placeholder="Author"
-              className="flex-1 rounded-md border border-surface-3 bg-surface-0 px-3 py-2 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
+              className="secondary-input"
             />
           )}
           {learningType === 'article' && (
@@ -87,7 +120,7 @@ export function CreateLearningButton() {
               name="url"
               type="url"
               placeholder="URL"
-              className="flex-1 rounded-md border border-surface-3 bg-surface-0 px-3 py-2 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
+              className="secondary-input"
             />
           )}
           {learningType === 'course' && (
@@ -95,31 +128,11 @@ export function CreateLearningButton() {
               name="platform"
               type="text"
               placeholder="Platform (Coursera, Udemy...)"
-              className="flex-1 rounded-md border border-surface-3 bg-surface-0 px-3 py-2 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
+              className="secondary-input"
             />
           )}
         </div>
-
-        <div className="flex justify-end gap-2">
-          <button
-            type="button"
-            onClick={() => setIsOpen(false)}
-            className="rounded-md px-3 py-1.5 text-sm text-text-secondary hover:bg-surface-2"
-          >
-            Cancel
-          </button>
-          <button
-            type="submit"
-            disabled={isSubmitting}
-            className={cn(
-              'rounded-md bg-brand-600 px-4 py-1.5 text-sm font-medium text-white',
-              'hover:bg-brand-700 disabled:opacity-50 transition-colors'
-            )}
-          >
-            {isSubmitting ? 'Adding...' : `Add ${learningType}`}
-          </button>
-        </div>
       </form>
-    </div>
+    </SecondaryDialogShell>
   );
 }

@@ -84,14 +84,17 @@ describe('weekly reviews', () => {
     await withTestContext(async () => {
       const { createTask, updateTask } = await import('./tasks');
       const { generateReviewForPeriod, regenerateReview, updateReviewBody } = await import('./reviews');
+      const { todayISO } = await import('@/lib/utils');
+
+      const reviewDate = todayISO();
 
       const firstTask = createTask({
         title: 'Close the loop on health checks',
-        dueDate: '2026-03-20',
+        dueDate: reviewDate,
       });
       updateTask({ id: firstTask!.id, status: 'done' });
 
-      const generated = generateReviewForPeriod('daily', '2026-03-20').review!;
+      const generated = generateReviewForPeriod('daily', reviewDate).review!;
       const personalizedBody = generated.body!
         .replace('_Add your own reflections here..._', 'Protect the first hour of the day for deep work.')
         .replace(
@@ -107,7 +110,7 @@ describe('weekly reviews', () => {
 
       const secondTask = createTask({
         title: 'Write the follow-up notes',
-        dueDate: '2026-03-20',
+        dueDate: reviewDate,
       });
       updateTask({ id: secondTask!.id, status: 'done' });
 

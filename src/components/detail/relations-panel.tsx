@@ -1,8 +1,9 @@
 'use client';
 
+import type { ReactNode } from 'react';
+import { useState, useTransition } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useState, useTransition, type ReactNode } from 'react';
 import {
   BarChart3,
   BookOpen,
@@ -70,7 +71,6 @@ function getRelationLabel(item: RelatedItem) {
 function getSuggestionSummary(suggestion: SuggestionItem): string {
   switch (suggestion.reason) {
     case 'shared_tags_and_mentions':
-      return `Shared tags: ${suggestion.sharedTags.map((tag) => `#${tag}`).join(', ')}`;
     case 'shared_tags':
       return `Shared tags: ${suggestion.sharedTags.map((tag) => `#${tag}`).join(', ')}`;
     case 'mentions':
@@ -88,45 +88,56 @@ export function RelationsPanel({
 }: RelationsPanelProps) {
   const outgoing = items.filter((item) => item.direction === 'outgoing');
   const incoming = items.filter((item) => item.direction === 'incoming');
-  const hasAnyContent =
-    outgoing.length > 0 ||
-    incoming.length > 0 ||
-    structuralItems.length > 0 ||
-    suggestions.length > 0;
+  const visibleCount = outgoing.length + incoming.length + structuralItems.length;
+  const hasAnyContent = visibleCount > 0 || suggestions.length > 0;
 
   if (!hasAnyContent && !onAddClick) return null;
 
   return (
-    <div className="card">
-      <div className="mb-4 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Link2 size={16} className="text-text-muted" />
-          <h3 className="text-sm font-semibold text-text-primary">Connections</h3>
-          {hasAnyContent ? (
-            <span className="text-2xs text-text-muted">
-              ({outgoing.length + incoming.length + structuralItems.length})
-            </span>
+    <div className="detail-side-panel">
+      <div className="detail-panel-header">
+        <div className="flex min-w-0 items-start gap-3">
+          <div className="capture-icon-orb h-11 w-11 border-[rgba(103,126,105,0.18)] bg-[radial-gradient(circle_at_top,rgba(228,239,229,0.96),rgba(191,213,193,0.78))]">
+            <Link2 size={16} className="text-[rgb(78,107,81)]" />
+          </div>
+          <div>
+            <div className="section-kicker text-[0.58rem]">Connections</div>
+            <h3 className="mt-2 text-lg font-semibold tracking-[-0.03em] text-text-primary">
+              Companion links around this record
+            </h3>
+            <p className="mt-1 text-sm leading-6 text-text-secondary">
+              Backlinks, outgoing links, inferred structure, and suggestion candidates all live here so the main artifact never feels isolated.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          {visibleCount > 0 ? (
+            <span className="shell-meta-pill">{visibleCount} linked</span>
+          ) : null}
+          {onAddClick ? (
+            <button
+              type="button"
+              onClick={onAddClick}
+              className="inline-flex items-center gap-1 rounded-full border border-line-soft bg-surface-0/78 px-3 py-1.5 text-xs font-medium text-text-secondary transition-colors hover:border-brand-300 hover:text-brand-700"
+            >
+              <Plus size={12} />
+              Link
+            </button>
           ) : null}
         </div>
-        {onAddClick ? (
-          <button
-            onClick={onAddClick}
-            className="flex items-center gap-1 rounded-md px-2 py-1 text-2xs text-text-muted transition-colors hover:bg-surface-2 hover:text-text-secondary"
-          >
-            <Plus size={12} />
-            Link
-          </button>
-        ) : null}
       </div>
 
       {!hasAnyContent ? (
-        <p className="py-2 text-2xs text-text-muted">No connected items yet.</p>
+        <p className="text-sm text-text-muted">
+          No connected items yet. Add a link once this record starts pointing outward.
+        </p>
       ) : (
-        <div className="space-y-4">
+        <div className="space-y-5">
           {incoming.length > 0 ? (
             <ConnectionSection
               title="Backlinks"
-              description="Items that point here."
+              description="Items that already point here."
               items={incoming}
             />
           ) : null}
@@ -134,7 +145,7 @@ export function RelationsPanel({
           {outgoing.length > 0 ? (
             <ConnectionSection
               title="Outgoing Links"
-              description="Items this page points to."
+              description="Items this page intentionally points to."
               items={outgoing}
             />
           ) : null}
@@ -142,7 +153,7 @@ export function RelationsPanel({
           {structuralItems.length > 0 ? (
             <ConnectionSection
               title="Inferred Links"
-              description="Connections inferred from fields like goal, project, parent relationships, or shared attachments."
+              description="Connections inferred from structure, shared files, or parent relationships."
               items={structuralItems}
               structural
             />
@@ -173,14 +184,19 @@ function ConnectionSection({
   structural?: boolean;
 }) {
   return (
-    <div>
-      <div className="mb-2">
-        <p className="text-2xs font-medium uppercase tracking-wider text-text-muted">{title}</p>
-        <p className="text-2xs text-text-muted">{description}</p>
+    <div className="space-y-2.5">
+      <div>
+        <div className="section-kicker text-[0.58rem]">{title}</div>
+        <p className="mt-2 text-sm leading-6 text-text-secondary">{description}</p>
       </div>
-      <div className="space-y-1">
+
+      <div className="space-y-2">
         {items.map((item) => (
-          <RelationRow key={`${item.direction}:${item.type}:${item.id}:${item.relation?.id ?? item.relationLabel}`} item={item} structural={structural} />
+          <RelationRow
+            key={`${item.direction}:${item.type}:${item.id}:${item.relation?.id ?? item.relationLabel}`}
+            item={item}
+            structural={structural}
+          />
         ))}
       </div>
     </div>
@@ -202,34 +218,36 @@ function RelationRow({ item, structural = false }: { item: RelatedItem; structur
   };
 
   return (
-    <div
-      className={cn(
-        'group flex items-center gap-2 rounded-md px-2 py-2 transition-colors hover:bg-surface-1',
-        isRemoving && 'opacity-40'
-      )}
-    >
-      <span className="text-text-muted">{icon}</span>
+    <div className={cn('detail-list-row group', isRemoving && 'opacity-40')}>
+      <div className="capture-icon-orb h-10 w-10 border-[rgba(121,95,67,0.14)] bg-[linear-gradient(135deg,rgba(255,251,245,0.9),rgba(245,235,219,0.78))]">
+        <span className="text-text-secondary">{icon}</span>
+      </div>
+
       <div className="min-w-0 flex-1">
         <Link
           href={href}
-          className="block truncate text-sm text-text-primary transition-colors hover:text-brand-600"
+          className="block truncate text-sm font-medium text-text-primary transition-colors hover:text-brand-700"
         >
           {item.title}
         </Link>
         {item.subtitle ? (
-          <p className="truncate text-2xs text-text-muted">{item.subtitle}</p>
+          <p className="truncate text-xs leading-5 text-text-muted">{item.subtitle}</p>
         ) : null}
       </div>
-      <span className="text-right text-2xs text-text-muted">{relationLabel}</span>
-      {!structural && item.relation ? (
-        <button
-          onClick={handleRemove}
-          disabled={isRemoving}
-          className="opacity-0 text-text-muted transition-all hover:text-status-danger group-hover:opacity-100"
-        >
-          <Trash2 size={12} />
-        </button>
-      ) : null}
+
+      <div className="flex items-center gap-2">
+        <span className="badge text-text-secondary">{relationLabel}</span>
+        {!structural && item.relation ? (
+          <button
+            type="button"
+            onClick={handleRemove}
+            disabled={isRemoving}
+            className="rounded-full p-1 text-text-muted opacity-0 transition-all hover:bg-surface-1 hover:text-status-danger group-hover:opacity-100"
+          >
+            <Trash2 size={12} />
+          </button>
+        ) : null}
+      </div>
     </div>
   );
 }
@@ -266,50 +284,51 @@ function SuggestionsSection({
   };
 
   return (
-    <div>
-      <div className="mb-2">
-        <p className="text-2xs font-medium uppercase tracking-wider text-text-muted">
-          Suggested Connections
-        </p>
-        <p className="text-2xs text-text-muted">
+    <div className="space-y-2.5">
+      <div>
+        <div className="section-kicker text-[0.58rem]">Suggested Connections</div>
+        <p className="mt-2 text-sm leading-6 text-text-secondary">
           Nearby items surfaced from shared tags and mention-like text matches.
         </p>
       </div>
-      <div className="space-y-1">
+
+      <div className="space-y-2">
         {suggestions.map((suggestion) => {
           const key = `${suggestion.type}:${suggestion.id}`;
           const icon = TYPE_ICONS[suggestion.type] ?? <Link2 size={14} />;
 
           return (
-            <div
-              key={key}
-              className="flex items-center gap-2 rounded-md px-2 py-2 transition-colors hover:bg-surface-1"
-            >
-              <span className="text-text-muted">{icon}</span>
+            <div key={key} className="detail-list-row">
+              <div className="capture-icon-orb h-10 w-10 border-[rgba(121,95,67,0.14)] bg-[linear-gradient(135deg,rgba(255,251,245,0.9),rgba(245,235,219,0.78))]">
+                <span className="text-text-secondary">{icon}</span>
+              </div>
+
               <div className="min-w-0 flex-1">
                 <Link
                   href={suggestion.detailUrl}
-                  className="block truncate text-sm text-text-primary transition-colors hover:text-brand-600"
+                  className="block truncate text-sm font-medium text-text-primary transition-colors hover:text-brand-700"
                 >
                   {suggestion.title}
                 </Link>
                 {suggestion.subtitle ? (
-                  <p className="truncate text-2xs text-text-muted">{suggestion.subtitle}</p>
+                  <p className="truncate text-xs leading-5 text-text-muted">{suggestion.subtitle}</p>
                 ) : null}
-                <p className="truncate text-2xs text-text-muted">
+                <p className="truncate text-xs leading-5 text-text-secondary">
                   {getSuggestionSummary(suggestion)}
                 </p>
                 {suggestion.reason === 'shared_tags_and_mentions' && suggestion.snippet ? (
-                  <p className="truncate text-2xs text-text-muted">
+                  <p className="truncate text-xs leading-5 text-text-muted">
                     Mention match: {suggestion.snippet}
                   </p>
                 ) : null}
               </div>
+
               {currentItemType && currentItemId ? (
                 <button
+                  type="button"
                   onClick={() => handleConnect(suggestion)}
                   disabled={isPending && pendingKey === key}
-                  className="rounded-md bg-surface-2 px-2 py-1 text-2xs font-medium text-text-primary transition-colors hover:bg-surface-3 disabled:opacity-50"
+                  className="rounded-full border border-line-soft bg-surface-0/8 px-3 py-1.5 text-xs font-medium text-text-secondary transition-colors hover:border-brand-300 hover:text-brand-700 disabled:opacity-50"
                 >
                   Connect
                 </button>
